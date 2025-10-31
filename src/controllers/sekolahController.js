@@ -1,13 +1,14 @@
-import { supabase } from "../config/SupabaseClient.js";
+import { supabase } from "../config/supabaseClient.js";
 
+// 🟢 Superadmin bisa lihat semua sekolah, admin hanya sekolahnya
 export const getAllSekolah = async (req, res) => {
   try {
-    const { role, id: userId } = req.user || req.body; // ambil role dan id dari user login
+    const { role, sekolah_id } = req.user || req.body;
 
     let query = supabase.from("sekolah").select("*");
 
     if (role === "admin") {
-      query = query.eq("creator_id", userId);
+      query = query.eq("id", sekolah_id);
     }
 
     const { data, error } = await query;
@@ -22,22 +23,16 @@ export const getAllSekolah = async (req, res) => {
   }
 };
 
+// 🟢 Hanya superadmin yang bisa membuat sekolah
 export const createSekolah = async (req, res) => {
   try {
     const { role, id: creator_id } = req.user || req.body;
     const { nama_sekolah, alamat_sekolah } = req.body;
 
-    // Cegah admin punya lebih dari 1 sekolah
-    if (role === "admin") {
-      const { count, error: countError } = await supabase
-        .from("sekolah")
-        .select("*", { count: "exact", head: true })
-        .eq("creator_id", creator_id);
-
-      if (countError) throw countError;
-      if (count > 0) {
-        return res.status(400).json({ error: "Admin hanya boleh memiliki satu sekolah" });
-      }
+    if (role !== "superadmin") {
+      return res
+        .status(403)
+        .json({ error: "Hanya superadmin yang dapat membuat sekolah" });
     }
 
     const { data, error } = await supabase
@@ -56,9 +51,18 @@ export const createSekolah = async (req, res) => {
   }
 };
 
+// 🟢 Semua user bisa lihat detail sekolah (admin hanya sekolah sendiri)
 export const getSekolahById = async (req, res) => {
   try {
     const { id } = req.params;
+    const { role, sekolah_id } = req.user || req.body;
+
+    if (role === "admin" && sekolah_id !== id) {
+      return res
+        .status(403)
+        .json({ error: "Tidak memiliki akses ke sekolah ini" });
+    }
+
     const { data, error } = await supabase
       .from("sekolah")
       .select("*")
@@ -76,23 +80,29 @@ export const getSekolahById = async (req, res) => {
   }
 };
 
+// 🟢 Hanya superadmin yang boleh update sekolah
 export const updateSekolah = async (req, res) => {
   try {
-    const { role, id: creator_id } = req.user || req.body;
+    const { role } = req.user || req.body;
     const { id } = req.params;
     const { nama_sekolah, alamat_sekolah } = req.body;
 
-    let query = supabase.from("sekolah").update({
-      nama_sekolah,
-      alamat_sekolah,
-      updated_at: new Date(),
-    }).eq("id", id);
-
-    if (role === "admin") {
-      query = query.eq("creator_id", creator_id);
+    if (role !== "superadmin") {
+      return res
+        .status(403)
+        .json({ error: "Hanya superadmin yang dapat mengubah sekolah" });
     }
 
-    const { data, error } = await query.select();
+    const { data, error } = await supabase
+      .from("sekolah")
+      .update({
+        nama_sekolah,
+        alamat_sekolah,
+        updated_at: new Date(),
+      })
+      .eq("id", id)
+      .select();
+
     if (error) throw error;
 
     res.json({
@@ -104,17 +114,24 @@ export const updateSekolah = async (req, res) => {
   }
 };
 
+// 🟢 Hanya superadmin yang boleh hapus sekolah
 export const deleteSekolah = async (req, res) => {
   try {
-    const { role, id: creator_id } = req.user || req.body;
+    const { role } = req.user || req.body;
     const { id } = req.params;
 
-    let query = supabase.from("sekolah").delete().eq("id", id);
-    if (role === "admin") {
-      query = query.eq("creator_id", creator_id);
+    if (role !== "superadmin") {
+      return res
+        .status(403)
+        .json({ error: "Hanya superadmin yang dapat menghapus sekolah" });
     }
 
-    const { data, error } = await query.select();
+    const { data, error } = await supabase
+      .from("sekolah")
+      .delete()
+      .eq("id", id)
+      .select();
+
     if (error) throw error;
 
     res.json({
@@ -125,4 +142,3 @@ export const deleteSekolah = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
-

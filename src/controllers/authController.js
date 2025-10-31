@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { supabase } from "../config/SupabaseClient.js";
+import { supabase } from "../config/supabaseClient.js";
 
 export const registerUser = async (req, res) => {
   try {
@@ -93,7 +93,16 @@ export const loginUser = async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.json({ message: "Login success", token, user: data });
+    res.json({
+      message: "Login success",
+      token,
+      user: {
+        id: data.id,
+        email: data.email,
+        role: data.role,
+        nama_lengkap: data.nama_lengkap
+      }
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

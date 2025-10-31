@@ -1,4 +1,4 @@
-import { supabase } from "../config/SupabaseClient.js";
+import { supabase } from "../config/supabaseClient.js";
 
 export const getAllKelas = async (req, res) => {
   try {

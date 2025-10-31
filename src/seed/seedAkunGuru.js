@@ -1,4 +1,4 @@
-import { supabase } from '../config/SupabaseClient.js';
+import { supabase } from '../config/supabaseClient.js';
 import bcrypt from 'bcrypt';
 
 const seedGuru = async () => {
