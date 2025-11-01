@@ -14,7 +14,10 @@ export const registerUser = async (req, res) => {
       nisn,
       alamat,
       tanggal_lahir,
+      sekolah_id,
     } = req.body;
+
+    console.log("📝 Register attempt:", { email, role });
 
     if (!email || !password || !nama_lengkap || !role) {
       return res.status(400).json({ error: "Missing required fields" });
@@ -29,24 +32,35 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ error: "NISN wajib diisi untuk siswa" });
     }
 
+    // 1️⃣ Create user di Supabase Auth
     const { data: authData, error: authError } =
       await supabase.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
+        user_metadata: {
+          nama_lengkap,
+          role,
+        },
       });
 
-    if (authError) throw authError;
+    if (authError) {
+      console.error("❌ Auth error:", authError);
+      return res.status(400).json({
+        error: "Gagal membuat akun",
+        details: authError.message,
+      });
+    }
 
     const userId = authData.user.id;
+    console.log("✅ Auth user created:", userId);
 
+    // 2️⃣ Insert ke tabel pengguna (TANPA password!)
     const { data, error } = await supabase
       .from("pengguna")
       .insert([
         {
           id: userId,
-          email,
-          password: await bcrypt.hash(password, 10),
           nama_lengkap,
           role,
           jenis_kelamin,
@@ -54,19 +68,36 @@ export const registerUser = async (req, res) => {
           nisn,
           alamat,
           tanggal_lahir,
+          sekolah_id,
         },
       ])
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Insert error:", error);
+      // Rollback: hapus user dari auth
+      await supabase.auth.admin.deleteUser(userId);
+      return res.status(400).json({
+        error: "Gagal menyimpan data pengguna",
+        details: error.message,
+      });
+    }
+
+    console.log("✅ User registered successfully:", data[0].id);
 
     res.status(201).json({
       message: "User registered",
-      user: data[0]
+      user: {
+        id: data[0].id,
+        email: data[0].email,
+        nama_lengkap: data[0].nama_lengkap,
+        role: data[0].role,
+      },
     });
   } catch (error) {
-    res.status(400).json({
-      error: error.message
+    console.error("❌ Registration error:", error);
+    res.status(500).json({
+      error: error.message,
     });
   }
 };
@@ -75,20 +106,46 @@ export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const { data, error } = await supabase
+    console.log("🔐 Login attempt for:", email);
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email dan password wajib diisi" });
+    }
+
+    // 1️⃣ Login via Supabase Auth
+    const { data: authData, error: authError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+    if (authError) {
+      console.error("❌ Auth error:", authError.message);
+      return res.status(400).json({
+        error: "Email atau password salah",
+        details: authError.message,
+      });
+    }
+
+    console.log("✅ Auth success for user ID:", authData.user.id);
+
+    // 2️⃣ Ambil data lengkap dari tabel pengguna
+    const { data: userData, error: userError } = await supabase
       .from("pengguna")
       .select("*")
-      .eq("email", email)
+      .eq("id", authData.user.id)
       .single();
 
-    if (error || !data)
-      return res.status(400).json({ error: "User not found" });
+    if (userError || !userData) {
+      console.error("❌ User data not found:", userError);
+      return res.status(400).json({ error: "Data pengguna tidak ditemukan" });
+    }
 
-    const valid = await bcrypt.compare(password, data.password);
-    if (!valid) return res.status(400).json({ error: "Invalid password" });
+    console.log("✅ User data found:", userData.email, userData.role);
 
+    // 3️⃣ Generate JWT token (custom backend token)
     const token = jwt.sign(
-      { id: data.id, role: data.role },
+      { id: userData.id, role: userData.role },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -97,14 +154,16 @@ export const loginUser = async (req, res) => {
       message: "Login success",
       token,
       user: {
-        id: data.id,
-        email: data.email,
-        role: data.role,
-        nama_lengkap: data.nama_lengkap
-      }
+        id: userData.id,
+        email: userData.email,
+        role: userData.role,
+        nama_lengkap: userData.nama_lengkap,
+        sekolah_id: userData.sekolah_id,
+      },
     });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error("❌ Login error:", error);
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -116,9 +175,10 @@ export const logoutUser = async (req, res) => {
     }
     const token = authHeader.split(" ")[1];
 
-    const { error } = await supabase.auth.admin.invalidateUserTokensByAccessToken(token);
+    const { error } =
+      await supabase.auth.admin.invalidateUserTokensByAccessToken(token);
     if (error) throw error;
-    
+
     res.json({ message: "Logout successful" });
   } catch (error) {
     res.status(400).json({ error: error.message });

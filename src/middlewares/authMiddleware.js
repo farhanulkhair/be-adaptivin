@@ -1,5 +1,19 @@
 import jwt from "jsonwebtoken";
-import { supabase } from "../config/supabaseClient.js";
+import { supabaseAdmin } from "../config/supabaseAdmin.js";
+
+const mapAuthErrorToStatus = (err) => {
+  if (!err) return { status: 401, message: "Unauthorized" };
+
+  if (err.name === "TokenExpiredError") {
+    return { status: 401, message: "Token expired" };
+  }
+
+  if (err.name === "JsonWebTokenError" || err.name === "NotBeforeError") {
+    return { status: 401, message: "Invalid token" };
+  }
+
+  return { status: 401, message: "Unauthorized" };
+};
 
 // Middleware utama untuk verifikasi token JWT custom kamu
 export const authMiddleware = async (req, res, next) => {
@@ -15,24 +29,31 @@ export const authMiddleware = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Ambil profil user dari Supabase berdasarkan ID yang ada di payload token
-    const { data: userProfile, error } = await supabase
+    const { data: userProfile, error } = await supabaseAdmin
       .from("pengguna")
-      .select("id, email, role, nama_lengkap")
+      .select("id, role, nama_lengkap, sekolah_id")
       .eq("id", decoded.id)
-      .single();
+      .maybeSingle();
 
-    if (error || !userProfile) {
-      return res.status(404).json({ error: "User profile not found" });
+    if (error) {
+      console.error("Supabase user fetch error:", error);
+      return res.status(500).json({
+        error: "Failed to retrieve user profile",
+        details: error.message,
+      });
+    }
+
+    if (!userProfile) {
+      console.warn("Auth Middleware: user profile not found for", decoded.id);
+      return res.status(401).json({ error: "User profile not found" });
     }
 
     req.user = userProfile;
     next();
   } catch (err) {
     console.error("Auth Middleware Error:", err);
-    if (err.name === "TokenExpiredError") {
-      return res.status(401).json({ error: "Token expired" });
-    }
-    res.status(401).json({ error: "Invalid token" });
+    const { status, message } = mapAuthErrorToStatus(err);
+    res.status(status).json({ error: message });
   }
 };
 
@@ -40,7 +61,9 @@ export const authMiddleware = async (req, res, next) => {
 export const requireAdminOrSuperadmin = (req, res, next) => {
   const { role } = req.user || {};
   if (role !== "admin" && role !== "superadmin") {
-    return res.status(403).json({ error: "Akses ditolak: Admin atau Superadmin saja" });
+    return res
+      .status(403)
+      .json({ error: "Akses ditolak: Admin atau Superadmin saja" });
   }
   next();
 };

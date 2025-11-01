@@ -51,16 +51,16 @@ export const createSekolah = async (req, res) => {
   }
 };
 
-// 🟢 Semua user bisa lihat detail sekolah (admin hanya sekolah sendiri)
+// 🟢 Superadmin bisa lihat detail sekolah (admin hanya sekolah sendiri)
 export const getSekolahById = async (req, res) => {
   try {
     const { id } = req.params;
     const { role, sekolah_id } = req.user || req.body;
 
-    if (role === "admin" && sekolah_id !== id) {
+    if (role !== "superadmin" && sekolah_id !== id) {
       return res
         .status(403)
-        .json({ error: "Tidak memiliki akses ke sekolah ini" });
+        .json({ error: "Hanya superadmin yang bisa melihat data detail sekolah" });
     }
 
     const { data, error } = await supabase
