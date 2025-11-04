@@ -25,7 +25,19 @@ const uploadToStorage = async (fileBuffer, fileName, folder, tipeMedia) => {
         upsert: false,
       });
 
-    if (error) throw error;
+    if (error) {
+      // Better error handling for RLS policy errors
+      if (error.statusCode === "403" || error.status === 403) {
+        console.error(
+          "❌ RLS Policy Error - Run SQL policies in Supabase Dashboard!"
+        );
+        console.error("📖 See STORAGE-FIX-README.md for instructions");
+        throw new Error(
+          "Storage upload forbidden. Please check RLS policies in Supabase."
+        );
+      }
+      throw error;
+    }
 
     // Get public URL
     const {

@@ -10,6 +10,7 @@ import adminRoutes from "./routes/adminRoutes.js";
 import kelasRoutes from "./routes/kelasRoutes.js";
 import sekolahRoutes from "./routes/sekolahRoutes.js";
 import materiRoutes from "./routes/materiRoutes.js";
+import soalRoutes from "./routes/soalRoutes.js";
 
 const app = express();
 
@@ -37,6 +38,8 @@ app.use("/api/admins", adminRoutes);
 console.log("✅ /api/admins registered");
 app.use("/api/materi", materiRoutes);
 console.log("✅ /api/materi registered");
+app.use("/api/soal", soalRoutes);
+console.log("✅ /api/soal registered");
 
 // 🔍 Test route untuk verify server berjalan
 app.get("/api/test", (req, res) => {
@@ -61,6 +64,7 @@ app.use((req, res) => {
       "/api/kelas/*",
       "/api/admins/*",
       "/api/materi/*",
+      "/api/soal/*",
     ],
   });
 });
