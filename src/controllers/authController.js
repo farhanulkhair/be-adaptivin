@@ -169,18 +169,17 @@ export const loginUser = async (req, res) => {
 
 export const logoutUser = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
-    }
-    const token = authHeader.split(" ")[1];
-
-    const { error } =
-      await supabase.auth.admin.invalidateUserTokensByAccessToken(token);
-    if (error) throw error;
-
-    res.json({ message: "Logout successful" });
+    console.log("🚪 Logout attempt for user ID:", req.user?.id);
+    console.log("✅ User logged out successfully:", req.user?.id);
+    res.json({
+      message: "Logout successful",
+      success: true,
+    });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error("❌ Logout error:", error);
+    res.status(500).json({
+      error: error.message || "Logout gagal",
+      success: false,
+    });
   }
 };

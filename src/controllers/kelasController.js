@@ -47,9 +47,35 @@ export const getAllKelas = async (req, res) => {
         role_dalam_kelas: row.role_dalam_kelas,
       }));
 
+      // Enrich dengan jumlah siswa untuk setiap kelas
+      const kelasIds = kelasData.map((k) => k.id).filter(Boolean);
+      let studentCounts = {};
+
+      if (kelasIds.length > 0) {
+        const { data: countData, error: countError } = await supabaseAdmin
+          .from("kelas_users")
+          .select("kelas_id")
+          .in("kelas_id", kelasIds)
+          .eq("role_dalam_kelas", "siswa");
+
+        if (countError) {
+          console.error("Error fetching student counts:", countError);
+        } else {
+          studentCounts = (countData || []).reduce((acc, row) => {
+            acc[row.kelas_id] = (acc[row.kelas_id] || 0) + 1;
+            return acc;
+          }, {});
+        }
+      }
+
+      const enrichedKelas = kelasData.map((kelas) => ({
+        ...kelas,
+        jumlah_siswa: studentCounts[kelas.id] || 0,
+      }));
+
       return res.json({
         message: "Kelas retrieved successfully",
-        kelas: kelasData,
+        kelas: enrichedKelas,
       });
     }
 

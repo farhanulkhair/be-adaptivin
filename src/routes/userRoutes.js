@@ -5,6 +5,10 @@ import {
   updateUser,
   deleteUser,
   createUser,
+  getMyProfile,
+  updateMyProfile,
+  updateMyPassword,
+  getSiswaByKelas,
 } from "../controllers/userController.js";
 import {
   authMiddleware,
@@ -12,6 +16,14 @@ import {
 } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
+
+// ✅ Self-service routes (guru/siswa can access their own profile)
+router.get("/me", authMiddleware, getMyProfile);
+router.put("/me", authMiddleware, updateMyProfile);
+router.put("/me/password", authMiddleware, updateMyPassword);
+
+// ✅ Get siswa by kelas (guru can see their students)
+router.get("/kelas/:kelasId/siswa", authMiddleware, getSiswaByKelas);
 
 // ✅ Routes for user guru and siswa - Harus pakai authentication
 router.get("/", authMiddleware, requireAdminOrSuperadmin, getAllUsers);

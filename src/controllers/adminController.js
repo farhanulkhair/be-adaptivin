@@ -10,7 +10,15 @@ export const getAllAdmins = async (req, res) => {
     }
     const { data, error } = await supabaseAdmin
       .from("pengguna")
-      .select("*")
+      .select(
+        `
+        *,
+        sekolah:sekolah_id (
+          id,
+          nama_sekolah
+        )
+      `
+      )
       .eq("role", "admin");
     if (error) throw error;
     const adminsWithEmail = await Promise.all(
@@ -28,6 +36,7 @@ export const getAllAdmins = async (req, res) => {
         return {
           ...adminRow,
           email: authData?.user?.email ?? null,
+          sekolah_name: adminRow.sekolah?.nama_sekolah ?? null,
         };
       })
     );
