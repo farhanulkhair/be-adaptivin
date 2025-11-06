@@ -310,21 +310,33 @@ export const createSoal = async (req, res) => {
     }
 
     // Validasi level_soal
-    const validLevels = ["c1", "c2", "c3", "c4", "c5", "c6"];
+    const validLevels = [
+      "level1",
+      "level2",
+      "level3",
+      "level4",
+      "level5",
+      "level6",
+    ];
     if (!validLevels.includes(level_soal)) {
       return res.status(400).json({
         success: false,
-        message: "level_soal harus salah satu dari: c1, c2, c3, c4, c5, c6",
+        message:
+          "level_soal harus salah satu dari: level1, level2, level3, level4, level5, level6",
       });
     }
 
     // Validasi tipe_jawaban
-    const validTypes = ["pilihan_ganda", "isian_singkat", "angka"];
+    const validTypes = [
+      "pilihan_ganda",
+      "pilihan_ganda_kompleks",
+      "isian_singkat",
+    ];
     if (!validTypes.includes(tipe_jawaban)) {
       return res.status(400).json({
         success: false,
         message:
-          "tipe_jawaban harus salah satu dari: pilihan_ganda, isian_singkat, angka",
+          "tipe_jawaban harus salah satu dari: pilihan_ganda, pilihan_ganda_kompleks, isian_singkat",
       });
     }
 
@@ -345,14 +357,32 @@ export const createSoal = async (req, res) => {
       });
     }
 
-    // Untuk pilihan ganda, boleh ada banyak jawaban tapi hanya 1 yang benar
-    // Untuk isian singkat dan angka, hanya 1 jawaban yang benar
-    if (tipe_jawaban !== "pilihan_ganda" && jawabanBenar.length !== 1) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Untuk isian singkat dan angka, harus ada tepat 1 jawaban yang benar",
-      });
+    // Validasi berdasarkan tipe jawaban
+    if (tipe_jawaban === "pilihan_ganda") {
+      // Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar
+      if (jawabanBenar.length !== 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar",
+        });
+      }
+    } else if (tipe_jawaban === "pilihan_ganda_kompleks") {
+      // Untuk pilihan ganda kompleks, minimal 1 jawaban benar (bisa lebih dari 1)
+      if (jawabanBenar.length < 1) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Untuk pilihan ganda kompleks, harus ada minimal 1 jawaban yang benar",
+        });
+      }
+    } else if (tipe_jawaban === "isian_singkat") {
+      // Untuk isian singkat, hanya 1 jawaban yang benar
+      if (jawabanBenar.length !== 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Untuk isian singkat, harus ada tepat 1 jawaban yang benar",
+        });
+      }
     }
 
     // Upload images if provided
@@ -486,7 +516,14 @@ export const updateSoal = async (req, res) => {
 
     if (materi_id) updateData.materi_id = materi_id;
     if (level_soal) {
-      const validLevels = ["c1", "c2", "c3", "c4", "c5", "c6"];
+      const validLevels = [
+        "level1",
+        "level2",
+        "level3",
+        "level4",
+        "level5",
+        "level6",
+      ];
       if (!validLevels.includes(level_soal)) {
         return res.status(400).json({
           success: false,
@@ -496,7 +533,11 @@ export const updateSoal = async (req, res) => {
       updateData.level_soal = level_soal;
     }
     if (tipe_jawaban) {
-      const validTypes = ["pilihan_ganda", "isian_singkat", "angka"];
+      const validTypes = [
+        "pilihan_ganda",
+        "pilihan_ganda_kompleks",
+        "isian_singkat",
+      ];
       if (!validTypes.includes(tipe_jawaban)) {
         return res.status(400).json({
           success: false,
@@ -570,15 +611,37 @@ export const updateSoal = async (req, res) => {
         });
       }
 
-      // Untuk pilihan ganda, boleh ada banyak jawaban tapi hanya 1 yang benar
+      // Validasi berdasarkan tipe jawaban
       const currentTipeJawaban =
         updateData.tipe_jawaban || existingSoal.tipe_jawaban;
-      if (currentTipeJawaban !== "pilihan_ganda" && jawabanBenar.length !== 1) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Untuk isian singkat dan angka, harus ada tepat 1 jawaban yang benar",
-        });
+
+      if (currentTipeJawaban === "pilihan_ganda") {
+        // Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar
+        if (jawabanBenar.length !== 1) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar",
+          });
+        }
+      } else if (currentTipeJawaban === "pilihan_ganda_kompleks") {
+        // Untuk pilihan ganda kompleks, minimal 1 jawaban benar (bisa lebih dari 1)
+        if (jawabanBenar.length < 1) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Untuk pilihan ganda kompleks, harus ada minimal 1 jawaban yang benar",
+          });
+        }
+      } else if (currentTipeJawaban === "isian_singkat") {
+        // Untuk isian singkat, hanya 1 jawaban yang benar
+        if (jawabanBenar.length !== 1) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Untuk isian singkat, harus ada tepat 1 jawaban yang benar",
+          });
+        }
       }
 
       // Delete old jawaban

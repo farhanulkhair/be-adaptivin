@@ -9,6 +9,7 @@ import {
   updateMyProfile,
   updateMyPassword,
   getSiswaByKelas,
+  getAllKarakter,
 } from "../controllers/userController.js";
 import {
   authMiddleware,
@@ -16,6 +17,9 @@ import {
 } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
+
+// ✅ Get all karakter (for pilih karakter page)
+router.get("/karakter", authMiddleware, getAllKarakter);
 
 // ✅ Self-service routes (guru/siswa can access their own profile)
 router.get("/me", authMiddleware, getMyProfile);

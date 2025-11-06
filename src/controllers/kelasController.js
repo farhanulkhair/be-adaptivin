@@ -47,22 +47,45 @@ export const getAllKelas = async (req, res) => {
         role_dalam_kelas: row.role_dalam_kelas,
       }));
 
-      // Enrich dengan jumlah siswa untuk setiap kelas
+      // Enrich dengan jumlah siswa dan foto profil siswa untuk setiap kelas
       const kelasIds = kelasData.map((k) => k.id).filter(Boolean);
       let studentCounts = {};
+      let studentProfiles = {};
 
       if (kelasIds.length > 0) {
-        const { data: countData, error: countError } = await supabaseAdmin
+        // Get student data dengan foto profil (limit 3 per kelas untuk preview)
+        const { data: siswaData, error: siswaError } = await supabaseAdmin
           .from("kelas_users")
-          .select("kelas_id")
+          .select(`
+            kelas_id,
+            pengguna:pengguna!kelas_users_pengguna_id_fkey (
+              id,
+              karakter:pilih_karakter!pengguna_karakter_id_fkey (
+                poto_profil_url
+              )
+            )
+          `)
           .in("kelas_id", kelasIds)
           .eq("role_dalam_kelas", "siswa");
 
-        if (countError) {
-          console.error("Error fetching student counts:", countError);
+        if (siswaError) {
+          console.error("Error fetching student data:", siswaError);
         } else {
-          studentCounts = (countData || []).reduce((acc, row) => {
+          // Count students per kelas
+          studentCounts = (siswaData || []).reduce((acc, row) => {
             acc[row.kelas_id] = (acc[row.kelas_id] || 0) + 1;
+            return acc;
+          }, {});
+
+          // Get first 3 student profile photos per kelas
+          studentProfiles = (siswaData || []).reduce((acc, row) => {
+            if (!acc[row.kelas_id]) {
+              acc[row.kelas_id] = [];
+            }
+            if (acc[row.kelas_id].length < 3) {
+              const profileUrl = row.pengguna?.karakter?.poto_profil_url || "/siswa/foto-profil/kocheng-oren.svg";
+              acc[row.kelas_id].push(profileUrl);
+            }
             return acc;
           }, {});
         }
@@ -71,6 +94,7 @@ export const getAllKelas = async (req, res) => {
       const enrichedKelas = kelasData.map((kelas) => ({
         ...kelas,
         jumlah_siswa: studentCounts[kelas.id] || 0,
+        student_profiles: studentProfiles[kelas.id] || [],
       }));
 
       return res.json({
@@ -98,22 +122,45 @@ export const getAllKelas = async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    // Enrich each kelas with student count
+    // Enrich each kelas with student count and profile photos
     const kelasIds = (data || []).map((kelas) => kelas.id);
     let studentCounts = {};
+    let studentProfiles = {};
 
     if (kelasIds.length > 0) {
-      const { data: countData, error: countError } = await supabaseAdmin
+      // Get student data dengan foto profil (limit 3 per kelas untuk preview)
+      const { data: siswaData, error: siswaError } = await supabaseAdmin
         .from("kelas_users")
-        .select("kelas_id")
+        .select(`
+          kelas_id,
+          pengguna:pengguna!kelas_users_pengguna_id_fkey (
+            id,
+            karakter:pilih_karakter!pengguna_karakter_id_fkey (
+              poto_profil_url
+            )
+          )
+        `)
         .in("kelas_id", kelasIds)
         .eq("role_dalam_kelas", "siswa");
 
-      if (countError) {
-        console.error("Error fetching student counts:", countError);
+      if (siswaError) {
+        console.error("Error fetching student data:", siswaError);
       } else {
-        studentCounts = (countData || []).reduce((acc, row) => {
+        // Count students per kelas
+        studentCounts = (siswaData || []).reduce((acc, row) => {
           acc[row.kelas_id] = (acc[row.kelas_id] || 0) + 1;
+          return acc;
+        }, {});
+
+        // Get first 3 student profile photos per kelas
+        studentProfiles = (siswaData || []).reduce((acc, row) => {
+          if (!acc[row.kelas_id]) {
+            acc[row.kelas_id] = [];
+          }
+          if (acc[row.kelas_id].length < 3) {
+            const profileUrl = row.pengguna?.karakter?.poto_profil_url || "/siswa/foto-profil/kocheng-oren.svg";
+            acc[row.kelas_id].push(profileUrl);
+          }
           return acc;
         }, {});
       }
@@ -122,6 +169,7 @@ export const getAllKelas = async (req, res) => {
     const enrichedKelas = (data || []).map((kelas) => ({
       ...kelas,
       jumlah_siswa: studentCounts[kelas.id] || 0,
+      student_profiles: studentProfiles[kelas.id] || [],
     }));
 
     res.json({

@@ -53,7 +53,7 @@ router.get("/:id", authMiddleware, getSoalById);
  * Body (form-data):
  * - materi_id: string (required)
  * - level_soal: string (c1-c6) (required)
- * - tipe_jawaban: string (pilihan_ganda|isian_singkat|angka) (required)
+ * - tipe_jawaban: string (pilihan_ganda|pilihan_ganda_kompleks|isian_singkat) (required)
  * - soal_teks: string (required)
  * - soal_gambar: file (optional, image only)
  * - penjelasan: string (optional)

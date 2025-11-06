@@ -10,12 +10,19 @@ const managedUserBaseSelect = `
   nisn,
   nip,
   sekolah_id,
+  karakter_id,
   creator_id,
   created_at,
   updated_at,
   sekolah:sekolah!pengguna_sekolah_id_fkey (
     id,
     nama_sekolah
+  ),
+  karakter:pilih_karakter!pengguna_karakter_id_fkey (
+    id,
+    index,
+    karakter_url,
+    poto_profil_url
   )
 `;
 
@@ -48,10 +55,19 @@ const serializeManagedUser = (row) => {
     nisn: row.nisn ?? null,
     nip: row.nip ?? null,
     sekolah_id: row.sekolah_id ?? null,
+    karakter_id: row.karakter_id ?? null,
     sekolah: row.sekolah
       ? {
           id: row.sekolah.id,
           nama_sekolah: row.sekolah.nama_sekolah ?? null,
+        }
+      : null,
+    karakter: row.karakter
+      ? {
+          id: row.karakter.id,
+          index: row.karakter.index ?? null,
+          karakter_url: row.karakter.karakter_url ?? null,
+          poto_profil_url: row.karakter.poto_profil_url ?? null,
         }
       : null,
     kelas: primaryAssignment?.kelas ? mapKelas(primaryAssignment.kelas) : null,
@@ -624,7 +640,7 @@ export const updateMyProfile = async (req, res) => {
       alamat,
       tanggal_lahir,
       jenis_kelamin,
-      profil_siswa_index,
+      karakter_id,
     } = req.body;
 
     // Build update object
@@ -649,16 +665,23 @@ export const updateMyProfile = async (req, res) => {
       updateData.jenis_kelamin = normalizedJenisKelamin;
     }
 
-    // Update profil siswa index (untuk ganti avatar)
-    if (profil_siswa_index !== undefined) {
-      // Validate: must be integer between 0-4 (5 avatars available)
-      const index = parseInt(profil_siswa_index);
-      if (isNaN(index) || index < 0 || index > 4) {
-        return res.status(400).json({
-          error: "profil_siswa_index harus angka 0-4",
-        });
+    // Update karakter_id (untuk ganti avatar dari table pilih_karakter)
+    if (karakter_id !== undefined) {
+      if (karakter_id) {
+        // Validate karakter exists
+        const { data: karakterData, error: karakterError } = await supabaseAdmin
+          .from("pilih_karakter")
+          .select("id")
+          .eq("id", karakter_id)
+          .single();
+
+        if (karakterError || !karakterData) {
+          return res.status(400).json({
+            error: "Karakter tidak ditemukan",
+          });
+        }
       }
-      updateData.profil_siswa_index = index;
+      updateData.karakter_id = karakter_id || null;
     }
 
     // Update di tabel pengguna
@@ -978,9 +1001,15 @@ export const getSiswaByKelas = async (req, res) => {
         jenis_kelamin,
         tanggal_lahir,
         alamat,
-        profil_siswa_index,
+        karakter_id,
         created_at,
-        updated_at
+        updated_at,
+        karakter:pilih_karakter!pengguna_karakter_id_fkey (
+          id,
+          index,
+          karakter_url,
+          poto_profil_url
+        )
       `
       )
       .in("id", siswaIds)
@@ -1017,6 +1046,27 @@ export const getSiswaByKelas = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ getSiswaByKelas error:", error);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+// Get all available karakter (for pilih karakter page)
+export const getAllKarakter = async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("pilih_karakter")
+      .select("id, index, karakter_url, poto_profil_url")
+      .order("index", { ascending: true });
+
+    if (error) throw error;
+
+    res.json({
+      message: "Karakter retrieved successfully",
+      karakter: data || [],
+      total: (data || []).length,
+    });
+  } catch (error) {
+    console.error("❌ getAllKarakter error:", error);
     res.status(400).json({ error: error.message });
   }
 };
