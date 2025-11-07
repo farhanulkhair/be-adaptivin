@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../config/supabaseAdmin.js";
 import multer from "multer";
+import { successResponse, errorResponse } from "../utils/responseHelper.js";
 
 // ==================== STORAGE HELPERS ====================
 
@@ -154,18 +155,18 @@ export const getAllSoal = async (req, res) => {
 
     if (error) throw error;
 
-    res.status(200).json({
-      success: true,
-      message: "Berhasil mengambil data soal",
-      data: data || [],
-    });
+    return successResponse(
+      res,
+      { data: data || [] },
+      "Berhasil mengambil data soal"
+    );
   } catch (error) {
     console.error("Error getting all soal:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal mengambil data soal",
-      error: error.message,
-    });
+    return errorResponse(
+      res,
+      `Gagal mengambil data soal: ${error.message}`,
+      500
+    );
   }
 };
 
@@ -197,26 +198,23 @@ export const getSoalById = async (req, res) => {
 
     if (error) {
       if (error.code === "PGRST116") {
-        return res.status(404).json({
-          success: false,
-          message: "Soal tidak ditemukan",
-        });
+        return errorResponse(res, "Soal tidak ditemukan", 404);
       }
       throw error;
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Berhasil mengambil data soal",
-      data,
-    });
+    return successResponse(
+      res,
+      { data },
+      "Berhasil mengambil data soal"
+    );
   } catch (error) {
     console.error("Error getting soal by ID:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal mengambil data soal",
-      error: error.message,
-    });
+    return errorResponse(
+      res,
+      `Gagal mengambil data soal: ${error.message}`,
+      500
+    );
   }
 };
 
@@ -252,18 +250,18 @@ export const getSoalCountByMateri = async (req, res) => {
       }
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Berhasil menghitung soal",
-      data: counts,
-    });
+    return successResponse(
+      res,
+      { data: counts },
+      "Berhasil menghitung soal"
+    );
   } catch (error) {
     console.error("Error counting soal:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal menghitung soal",
-      error: error.message,
-    });
+    return errorResponse(
+      res,
+      `Gagal menghitung soal: ${error.message}`,
+      500
+    );
   }
 };
 
@@ -288,10 +286,11 @@ export const createSoal = async (req, res) => {
     try {
       jawaban = req.body.jawaban ? JSON.parse(req.body.jawaban) : null;
     } catch (parseError) {
-      return res.status(400).json({
-        success: false,
-        message: "Format jawaban tidak valid. Harus berupa JSON array.",
-      });
+      return errorResponse(
+        res,
+        "Format jawaban tidak valid. Harus berupa JSON array.",
+        400
+      );
     }
 
     // Validasi required fields
@@ -302,11 +301,11 @@ export const createSoal = async (req, res) => {
       !soal_teks ||
       !durasi_soal
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Field wajib: materi_id, level_soal, tipe_jawaban, soal_teks, durasi_soal",
-      });
+      return errorResponse(
+        res,
+        "Field wajib: materi_id, level_soal, tipe_jawaban, soal_teks, durasi_soal",
+        400
+      );
     }
 
     // Validasi level_soal
@@ -319,11 +318,11 @@ export const createSoal = async (req, res) => {
       "level6",
     ];
     if (!validLevels.includes(level_soal)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "level_soal harus salah satu dari: level1, level2, level3, level4, level5, level6",
-      });
+      return errorResponse(
+        res,
+        "level_soal harus salah satu dari: level1, level2, level3, level4, level5, level6",
+        400
+      );
     }
 
     // Validasi tipe_jawaban
@@ -333,55 +332,59 @@ export const createSoal = async (req, res) => {
       "isian_singkat",
     ];
     if (!validTypes.includes(tipe_jawaban)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "tipe_jawaban harus salah satu dari: pilihan_ganda, pilihan_ganda_kompleks, isian_singkat",
-      });
+      return errorResponse(
+        res,
+        "tipe_jawaban harus salah satu dari: pilihan_ganda, pilihan_ganda_kompleks, isian_singkat",
+        400
+      );
     }
 
     // Validasi jawaban array
     if (!jawaban || !Array.isArray(jawaban) || jawaban.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "jawaban harus berupa array dan tidak boleh kosong",
-      });
+      return errorResponse(
+        res,
+        "jawaban harus berupa array dan tidak boleh kosong",
+        400
+      );
     }
 
     // Validasi harus ada minimal 1 jawaban benar
     const jawabanBenar = jawaban.filter((j) => j.is_benar === true);
     if (jawabanBenar.length < 1) {
-      return res.status(400).json({
-        success: false,
-        message: "Harus ada minimal 1 jawaban yang benar (is_benar: true)",
-      });
+      return errorResponse(
+        res,
+        "Harus ada minimal 1 jawaban yang benar (is_benar: true)",
+        400
+      );
     }
 
     // Validasi berdasarkan tipe jawaban
     if (tipe_jawaban === "pilihan_ganda") {
       // Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar
       if (jawabanBenar.length !== 1) {
-        return res.status(400).json({
-          success: false,
-          message: "Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar",
-        });
+        return errorResponse(
+          res,
+          "Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar",
+          400
+        );
       }
     } else if (tipe_jawaban === "pilihan_ganda_kompleks") {
       // Untuk pilihan ganda kompleks, minimal 1 jawaban benar (bisa lebih dari 1)
       if (jawabanBenar.length < 1) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Untuk pilihan ganda kompleks, harus ada minimal 1 jawaban yang benar",
-        });
+        return errorResponse(
+          res,
+          "Untuk pilihan ganda kompleks, harus ada minimal 1 jawaban yang benar",
+          400
+        );
       }
     } else if (tipe_jawaban === "isian_singkat") {
       // Untuk isian singkat, hanya 1 jawaban yang benar
       if (jawabanBenar.length !== 1) {
-        return res.status(400).json({
-          success: false,
-          message: "Untuk isian singkat, harus ada tepat 1 jawaban yang benar",
-        });
+        return errorResponse(
+          res,
+          "Untuk isian singkat, harus ada tepat 1 jawaban yang benar",
+          400
+        );
       }
     }
 
@@ -448,21 +451,24 @@ export const createSoal = async (req, res) => {
       throw jawabanError;
     }
 
-    res.status(201).json({
-      success: true,
-      message: "Berhasil membuat soal",
-      data: {
-        ...soalData,
-        jawaban: jawabanData,
+    return successResponse(
+      res,
+      {
+        data: {
+          ...soalData,
+          jawaban: jawabanData,
+        },
       },
-    });
+      "Berhasil membuat soal",
+      201
+    );
   } catch (error) {
     console.error("Error creating soal:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal membuat soal",
-      error: error.message,
-    });
+    return errorResponse(
+      res,
+      `Gagal membuat soal: ${error.message}`,
+      500
+    );
   }
 };
 
@@ -490,10 +496,11 @@ export const updateSoal = async (req, res) => {
       try {
         jawaban = JSON.parse(req.body.jawaban);
       } catch (parseError) {
-        return res.status(400).json({
-          success: false,
-          message: "Format jawaban tidak valid. Harus berupa JSON array.",
-        });
+        return errorResponse(
+          res,
+          "Format jawaban tidak valid. Harus berupa JSON array.",
+          400
+        );
       }
     }
 
@@ -505,10 +512,7 @@ export const updateSoal = async (req, res) => {
       .single();
 
     if (checkError || !existingSoal) {
-      return res.status(404).json({
-        success: false,
-        message: "Soal tidak ditemukan",
-      });
+      return errorResponse(res, "Soal tidak ditemukan", 404);
     }
 
     // Prepare update object
@@ -525,10 +529,7 @@ export const updateSoal = async (req, res) => {
         "level6",
       ];
       if (!validLevels.includes(level_soal)) {
-        return res.status(400).json({
-          success: false,
-          message: "level_soal tidak valid",
-        });
+        return errorResponse(res, "level_soal tidak valid", 400);
       }
       updateData.level_soal = level_soal;
     }
@@ -539,10 +540,7 @@ export const updateSoal = async (req, res) => {
         "isian_singkat",
       ];
       if (!validTypes.includes(tipe_jawaban)) {
-        return res.status(400).json({
-          success: false,
-          message: "tipe_jawaban tidak valid",
-        });
+        return errorResponse(res, "tipe_jawaban tidak valid", 400);
       }
       updateData.tipe_jawaban = tipe_jawaban;
     }
@@ -605,10 +603,11 @@ export const updateSoal = async (req, res) => {
       // Validasi harus ada minimal 1 jawaban benar
       const jawabanBenar = jawaban.filter((j) => j.is_benar === true);
       if (jawabanBenar.length < 1) {
-        return res.status(400).json({
-          success: false,
-          message: "Harus ada minimal 1 jawaban yang benar",
-        });
+        return errorResponse(
+          res,
+          "Harus ada minimal 1 jawaban yang benar",
+          400
+        );
       }
 
       // Validasi berdasarkan tipe jawaban
@@ -618,29 +617,29 @@ export const updateSoal = async (req, res) => {
       if (currentTipeJawaban === "pilihan_ganda") {
         // Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar
         if (jawabanBenar.length !== 1) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar",
-          });
+          return errorResponse(
+            res,
+            "Untuk pilihan ganda, harus ada tepat 1 jawaban yang benar",
+            400
+          );
         }
       } else if (currentTipeJawaban === "pilihan_ganda_kompleks") {
         // Untuk pilihan ganda kompleks, minimal 1 jawaban benar (bisa lebih dari 1)
         if (jawabanBenar.length < 1) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Untuk pilihan ganda kompleks, harus ada minimal 1 jawaban yang benar",
-          });
+          return errorResponse(
+            res,
+            "Untuk pilihan ganda kompleks, harus ada minimal 1 jawaban yang benar",
+            400
+          );
         }
       } else if (currentTipeJawaban === "isian_singkat") {
         // Untuk isian singkat, hanya 1 jawaban yang benar
         if (jawabanBenar.length !== 1) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Untuk isian singkat, harus ada tepat 1 jawaban yang benar",
-          });
+          return errorResponse(
+            res,
+            "Untuk isian singkat, harus ada tepat 1 jawaban yang benar",
+            400
+          );
         }
       }
 
@@ -663,21 +662,23 @@ export const updateSoal = async (req, res) => {
       jawabanData = newJawaban;
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Berhasil update soal",
-      data: {
-        ...soalData,
-        jawaban: jawabanData,
+    return successResponse(
+      res,
+      {
+        data: {
+          ...soalData,
+          jawaban: jawabanData,
+        },
       },
-    });
+      "Berhasil update soal"
+    );
   } catch (error) {
     console.error("Error updating soal:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal update soal",
-      error: error.message,
-    });
+    return errorResponse(
+      res,
+      `Gagal update soal: ${error.message}`,
+      500
+    );
   }
 };
 
@@ -697,10 +698,7 @@ export const deleteSoal = async (req, res) => {
       .single();
 
     if (getError || !soalData) {
-      return res.status(404).json({
-        success: false,
-        message: "Soal tidak ditemukan",
-      });
+      return errorResponse(res, "Soal tidak ditemukan", 404);
     }
 
     // Delete images from storage
@@ -719,17 +717,14 @@ export const deleteSoal = async (req, res) => {
 
     if (deleteError) throw deleteError;
 
-    res.status(200).json({
-      success: true,
-      message: "Berhasil menghapus soal",
-    });
+    return successResponse(res, null, "Berhasil menghapus soal");
   } catch (error) {
     console.error("Error deleting soal:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal menghapus soal",
-      error: error.message,
-    });
+    return errorResponse(
+      res,
+      `Gagal menghapus soal: ${error.message}`,
+      500
+    );
   }
 };
 
@@ -766,18 +761,18 @@ export const getMateriDropdown = async (req, res) => {
       kelas: m.kelas,
     }));
 
-    res.status(200).json({
-      success: true,
-      message: "Berhasil mengambil data materi",
-      data: formatted || [],
-    });
+    return successResponse(
+      res,
+      { data: formatted || [] },
+      "Berhasil mengambil data materi"
+    );
   } catch (error) {
     console.error("Error getting materi dropdown:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal mengambil data materi",
-      error: error.message,
-    });
+    return errorResponse(
+      res,
+      `Gagal mengambil data materi: ${error.message}`,
+      500
+    );
   }
 };
 

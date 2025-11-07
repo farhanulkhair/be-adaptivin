@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabaseAdmin.js";
+import { successResponse, errorResponse } from "../utils/responseHelper.js";
 
 const managedUserBaseSelect = `
   id,
@@ -184,7 +185,7 @@ export const getAllUsers = async (req, res) => {
     });
 
     if (!["superadmin", "admin"].includes(requesterRole)) {
-      return res.status(403).json({ error: "Akses ditolak" });
+      return errorResponse(res, "Akses ditolak", 403);
     }
 
     let query = buildManagedUsersQuery();
@@ -198,10 +199,11 @@ export const getAllUsers = async (req, res) => {
         console.log(
           "⚠️ Admin tidak memiliki sekolah_id, mengembalikan array kosong"
         );
-        return res.json({
-          message: "Admin belum terhubung dengan sekolah manapun",
-          users: [],
-        });
+        return successResponse(
+          res,
+          { users: [] },
+          "Admin belum terhubung dengan sekolah manapun"
+        );
       }
       query = query.eq("sekolah_id", requesterSchoolId);
     } else if (sekolahFilter) {
@@ -224,13 +226,14 @@ export const getAllUsers = async (req, res) => {
       console.error("enrichUsersWithKelasAssignments failed:", enrichError);
     }
 
-    res.json({
-      message: "Users retrieved successfully",
-      users: enrichedUsers.map(serializeManagedUser),
-    });
+    return successResponse(
+      res,
+      { users: enrichedUsers.map(serializeManagedUser) },
+      "Users retrieved successfully"
+    );
   } catch (error) {
     console.error("getAllUsers error:", error);
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -240,7 +243,7 @@ export const getUserById = async (req, res) => {
     const { role: requesterRole, sekolah_id: requesterSchoolId } = req.user;
 
     if (!["superadmin", "admin"].includes(requesterRole)) {
-      return res.status(403).json({ error: "Akses ditolak" });
+      return errorResponse(res, "Akses ditolak", 403);
     }
 
     const { data, error } = await buildManagedUsersQuery()
@@ -249,7 +252,7 @@ export const getUserById = async (req, res) => {
 
     if (error) throw error;
     if (!data) {
-      return res.status(404).json({ error: "User tidak ditemukan" });
+      return errorResponse(res, "User tidak ditemukan", 404);
     }
 
     let enrichedUser = data;
@@ -265,15 +268,16 @@ export const getUserById = async (req, res) => {
       requesterSchoolId &&
       enrichedUser?.sekolah_id !== requesterSchoolId
     ) {
-      return res.status(403).json({ error: "Akses ditolak" });
+      return errorResponse(res, "Akses ditolak", 403);
     }
 
-    res.json({
-      message: "User retrieved successfully",
-      user: serializeManagedUser(enrichedUser),
-    });
+    return successResponse(
+      res,
+      { user: serializeManagedUser(enrichedUser) },
+      "User retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -301,25 +305,27 @@ export const updateUser = async (req, res) => {
 
     if (existingError) throw existingError;
     if (!existingUser) {
-      return res.status(404).json({ error: "User tidak ditemukan" });
+      return errorResponse(res, "User tidak ditemukan", 404);
     }
 
     if (
       requesterRole === "admin" &&
       (!requesterSchoolId || existingUser.sekolah_id !== requesterSchoolId)
     ) {
-      return res.status(403).json({ error: "Akses ditolak" });
+      return errorResponse(res, "Akses ditolak", 403);
     }
 
     const normalizedRole = (newRole ?? existingUser.role)?.toLowerCase();
     if (newRole) {
       if (["admin", "superadmin"].includes(normalizedRole)) {
-        return res.status(403).json({
-          error: "Admin tidak boleh ubah role ke admin/superadmin",
-        });
+        return errorResponse(
+          res,
+          "Admin tidak boleh ubah role ke admin/superadmin",
+          403
+        );
       }
       if (!["guru", "siswa"].includes(normalizedRole)) {
-        return res.status(400).json({ error: "Role tidak valid" });
+        return errorResponse(res, "Role tidak valid", 400);
       }
     }
 
@@ -338,9 +344,11 @@ export const updateUser = async (req, res) => {
         normalizedJenisKelamin &&
         !["laki-laki", "perempuan"].includes(normalizedJenisKelamin)
       ) {
-        return res.status(400).json({
-          error: "Jenis kelamin harus 'laki-laki' atau 'perempuan'",
-        });
+        return errorResponse(
+          res,
+          "Jenis kelamin harus 'laki-laki' atau 'perempuan'",
+          400
+        );
       }
       payload.jenis_kelamin = normalizedJenisKelamin;
     }
@@ -399,9 +407,7 @@ export const updateUser = async (req, res) => {
         if (kelasFetchError) throw kelasFetchError;
 
         if (kelasDataList.length !== classesToAssign.length) {
-          return res
-            .status(400)
-            .json({ error: "Beberapa kelas tidak ditemukan" });
+          return errorResponse(res, "Beberapa kelas tidak ditemukan", 400);
         }
 
         if (requesterRole === "admin" && requesterSchoolId) {
@@ -409,9 +415,11 @@ export const updateUser = async (req, res) => {
             (k) => k.sekolah_id !== requesterSchoolId
           );
           if (invalidKelas) {
-            return res.status(403).json({
-              error: "Beberapa kelas tidak tersedia untuk sekolah Anda",
-            });
+            return errorResponse(
+              res,
+              "Beberapa kelas tidak tersedia untuk sekolah Anda",
+              403
+            );
           }
         }
       }
@@ -453,12 +461,13 @@ export const updateUser = async (req, res) => {
       console.error("enrich user after update failed:", enrichError);
     }
 
-    res.json({
-      message: "User updated successfully",
-      user: serializeManagedUser(enrichedUser ?? null),
-    });
+    return successResponse(
+      res,
+      { user: serializeManagedUser(enrichedUser ?? null) },
+      "User updated successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -468,7 +477,7 @@ export const deleteUser = async (req, res) => {
     const { role: requesterRole, sekolah_id: requesterSchoolId } = req.user;
 
     if (!["superadmin", "admin"].includes(requesterRole)) {
-      return res.status(403).json({ error: "Akses ditolak" });
+      return errorResponse(res, "Akses ditolak", 403);
     }
 
     const { data: existingUser, error: existingError } = await supabaseAdmin
@@ -479,14 +488,14 @@ export const deleteUser = async (req, res) => {
 
     if (existingError) throw existingError;
     if (!existingUser) {
-      return res.status(404).json({ error: "User tidak ditemukan" });
+      return errorResponse(res, "User tidak ditemukan", 404);
     }
 
     if (
       requesterRole === "admin" &&
       (!requesterSchoolId || existingUser.sekolah_id !== requesterSchoolId)
     ) {
-      return res.status(403).json({ error: "Akses ditolak" });
+      return errorResponse(res, "Akses ditolak", 403);
     }
 
     const { error: detachError } = await supabaseAdmin
@@ -517,12 +526,13 @@ export const deleteUser = async (req, res) => {
       console.error("Delete auth user warning:", authError.message);
     }
 
-    res.json({
-      message: "User deleted successfully",
-      user: serializeManagedUser(enrichedUser ?? null),
-    });
+    return successResponse(
+      res,
+      { user: serializeManagedUser(enrichedUser ?? null) },
+      "User deleted successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -560,12 +570,13 @@ export const getMyProfile = async (req, res) => {
       console.error("enrich user detail failed:", enrichError);
     }
 
-    res.json({
-      message: "Profile retrieved successfully",
-      user: serializeManagedUser(enrichedUser),
-    });
+    return successResponse(
+      res,
+      { user: serializeManagedUser(enrichedUser) },
+      "Profile retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -577,15 +588,15 @@ export const updateMyPassword = async (req, res) => {
 
     // Validasi input
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        error: "currentPassword dan newPassword wajib diisi",
-      });
+      return errorResponse(
+        res,
+        "currentPassword dan newPassword wajib diisi",
+        400
+      );
     }
 
     if (newPassword.length < 8) {
-      return res.status(400).json({
-        error: "Password baru minimal 8 karakter",
-      });
+      return errorResponse(res, "Password baru minimal 8 karakter", 400);
     }
 
     // Get user email first
@@ -593,9 +604,7 @@ export const updateMyPassword = async (req, res) => {
       await supabaseAdmin.auth.admin.getUserById(userId);
 
     if (authError || !authData?.user?.email) {
-      return res.status(400).json({
-        error: "Gagal mendapatkan informasi user",
-      });
+      return errorResponse(res, "Gagal mendapatkan informasi user", 400);
     }
 
     // Verify current password by attempting to sign in
@@ -605,9 +614,7 @@ export const updateMyPassword = async (req, res) => {
     });
 
     if (signInError) {
-      return res.status(401).json({
-        error: "Password saat ini salah",
-      });
+      return errorResponse(res, "Password saat ini salah", 401);
     }
 
     // Update password via admin API
@@ -617,17 +624,16 @@ export const updateMyPassword = async (req, res) => {
       });
 
     if (updateError) {
-      return res.status(400).json({
-        error: "Gagal mengubah password",
-        details: updateError.message,
-      });
+      return errorResponse(
+        res,
+        `Gagal mengubah password: ${updateError.message}`,
+        400
+      );
     }
 
-    res.json({
-      message: "Password berhasil diubah",
-    });
+    return successResponse(res, null, "Password berhasil diubah");
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -658,9 +664,11 @@ export const updateMyProfile = async (req, res) => {
         normalizedJenisKelamin &&
         !["laki-laki", "perempuan"].includes(normalizedJenisKelamin)
       ) {
-        return res.status(400).json({
-          error: "Jenis kelamin harus 'laki-laki' atau 'perempuan'",
-        });
+        return errorResponse(
+          res,
+          "Jenis kelamin harus 'laki-laki' atau 'perempuan'",
+          400
+        );
       }
       updateData.jenis_kelamin = normalizedJenisKelamin;
     }
@@ -676,9 +684,7 @@ export const updateMyProfile = async (req, res) => {
           .single();
 
         if (karakterError || !karakterData) {
-          return res.status(400).json({
-            error: "Karakter tidak ditemukan",
-          });
+          return errorResponse(res, "Karakter tidak ditemukan", 400);
         }
       }
       updateData.karakter_id = karakter_id || null;
@@ -692,7 +698,7 @@ export const updateMyProfile = async (req, res) => {
       .select(managedUserBaseSelect);
 
     if (error) {
-      return res.status(400).json({ error: error.message });
+      return errorResponse(res, error.message, 400);
     }
 
     // Get email from auth.users
@@ -715,12 +721,13 @@ export const updateMyProfile = async (req, res) => {
       console.error("enrich user after update failed:", enrichError);
     }
 
-    res.json({
-      message: "Profile updated successfully",
-      user: serializeManagedUser(enrichedUser),
-    });
+    return successResponse(
+      res,
+      { user: serializeManagedUser(enrichedUser) },
+      "Profile updated successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -740,7 +747,7 @@ export const createUser = async (req, res) => {
     });
 
     if (!["superadmin", "admin"].includes(requesterRole)) {
-      return res.status(403).json({ error: "Akses ditolak" });
+      return errorResponse(res, "Akses ditolak", 403);
     }
 
     const {
@@ -759,14 +766,16 @@ export const createUser = async (req, res) => {
     } = req.body;
 
     if (!email || !password || !nama_lengkap || !role) {
-      return res
-        .status(400)
-        .json({ error: "Field email, password, nama_lengkap, dan role wajib" });
+      return errorResponse(
+        res,
+        "Field email, password, nama_lengkap, dan role wajib",
+        400
+      );
     }
 
     const normalizedRole = String(role).toLowerCase();
     if (!["guru", "siswa"].includes(normalizedRole)) {
-      return res.status(400).json({ error: "Role tidak valid" });
+      return errorResponse(res, "Role tidak valid", 400);
     }
 
     // Normalize jenis_kelamin to match database enum
@@ -777,17 +786,19 @@ export const createUser = async (req, res) => {
       normalizedJenisKelamin &&
       !["laki-laki", "perempuan"].includes(normalizedJenisKelamin)
     ) {
-      return res.status(400).json({
-        error: "Jenis kelamin harus 'laki-laki' atau 'perempuan'",
-      });
+      return errorResponse(
+        res,
+        "Jenis kelamin harus 'laki-laki' atau 'perempuan'",
+        400
+      );
     }
 
     if (normalizedRole === "guru" && !nip) {
-      return res.status(400).json({ error: "NIP wajib diisi untuk guru" });
+      return errorResponse(res, "NIP wajib diisi untuk guru", 400);
     }
 
     if (normalizedRole === "siswa" && !nisn) {
-      return res.status(400).json({ error: "NISN wajib diisi untuk siswa" });
+      return errorResponse(res, "NISN wajib diisi untuk siswa", 400);
     }
 
     const resolvedSchoolId =
@@ -807,7 +818,7 @@ export const createUser = async (req, res) => {
 
       if (kelasError) throw kelasError;
       if (!kelasData) {
-        return res.status(400).json({ error: "Kelas tidak ditemukan" });
+        return errorResponse(res, "Kelas tidak ditemukan", 400);
       }
 
       if (
@@ -910,13 +921,15 @@ export const createUser = async (req, res) => {
       console.error("enrich user after create failed:", enrichError);
     }
 
-    res.status(201).json({
-      message: "User created successfully",
-      user: serializeManagedUser(enrichedUser ?? null),
-    });
+    return successResponse(
+      res,
+      { user: serializeManagedUser(enrichedUser ?? null) },
+      "User created successfully",
+      201
+    );
   } catch (error) {
     console.error("❌ createUser error:", error);
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -945,9 +958,7 @@ export const getSiswaByKelas = async (req, res) => {
 
       if (guruKelasError) throw guruKelasError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses ke kelas ini",
-        });
+        return errorResponse(res, "Anda tidak memiliki akses ke kelas ini", 403);
       }
     } else if (requesterRole === "siswa") {
       // Siswa can only see classmates
@@ -961,9 +972,7 @@ export const getSiswaByKelas = async (req, res) => {
 
       if (siswaKelasError) throw siswaKelasError;
       if (!siswaKelas) {
-        return res.status(403).json({
-          error: "Anda tidak terdaftar di kelas ini",
-        });
+        return errorResponse(res, "Anda tidak terdaftar di kelas ini", 403);
       }
     }
     // Admin and superadmin can access all classes
@@ -983,11 +992,11 @@ export const getSiswaByKelas = async (req, res) => {
       .filter(Boolean);
 
     if (siswaIds.length === 0) {
-      return res.json({
-        message: "Siswa retrieved successfully",
-        siswa: [],
-        total: 0,
-      });
+      return successResponse(
+        res,
+        { siswa: [], total: 0 },
+        "Siswa retrieved successfully"
+      );
     }
 
     // Get siswa details
@@ -1039,14 +1048,17 @@ export const getSiswaByKelas = async (req, res) => {
       })
     );
 
-    res.json({
-      message: "Siswa retrieved successfully",
-      siswa: enrichedSiswa,
-      total: enrichedSiswa.length,
-    });
+    return successResponse(
+      res,
+      {
+        siswa: enrichedSiswa,
+        total: enrichedSiswa.length,
+      },
+      "Siswa retrieved successfully"
+    );
   } catch (error) {
     console.error("❌ getSiswaByKelas error:", error);
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -1060,13 +1072,16 @@ export const getAllKarakter = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
-      message: "Karakter retrieved successfully",
-      karakter: data || [],
-      total: (data || []).length,
-    });
+    return successResponse(
+      res,
+      {
+        karakter: data || [],
+        total: (data || []).length,
+      },
+      "Karakter retrieved successfully"
+    );
   } catch (error) {
     console.error("❌ getAllKarakter error:", error);
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };

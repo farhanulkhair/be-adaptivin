@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabaseAdmin.js";
+import { successResponse, errorResponse } from "../utils/responseHelper.js";
 
 // ==================== STORAGE HELPERS ====================
 
@@ -10,7 +11,7 @@ import { supabaseAdmin } from "../config/supabaseAdmin.js";
  * @param {string} tipeMedia - Type of media ('pdf', 'video', 'gambar')
  * @returns {Promise<string>} - Public URL of uploaded file
  */
-const uploadToStorage = async (fileBuffer, fileName, folder, tipeMedia) => {
+export const uploadToStorage = async (fileBuffer, fileName, folder, tipeMedia) => {
   try {
     // Generate unique filename
     const timestamp = Date.now();
@@ -55,7 +56,7 @@ const uploadToStorage = async (fileBuffer, fileName, folder, tipeMedia) => {
  * Delete file from Supabase Storage
  * @param {string} url - Public URL of the file
  */
-const deleteFromStorage = async (url) => {
+export const deleteFromStorage = async (url) => {
   try {
     // Extract file path from URL
     // URL format: https://<project>.supabase.co/storage/v1/object/public/materi/<path>
@@ -83,7 +84,7 @@ const deleteFromStorage = async (url) => {
 /**
  * Get content type based on media type and file name
  */
-const getContentType = (tipeMedia, fileName) => {
+export const getContentType = (tipeMedia, fileName) => {
   const extension = fileName.split(".").pop().toLowerCase();
 
   if (tipeMedia === "pdf") {
@@ -115,7 +116,7 @@ const getContentType = (tipeMedia, fileName) => {
 /**
  * Validate file type matches tipe_media
  */
-const validateFileType = (fileName, tipeMedia) => {
+export const validateFileType = (fileName, tipeMedia) => {
   const extension = fileName.split(".").pop().toLowerCase();
 
   const validExtensions = {
@@ -151,9 +152,7 @@ export const getMateriByKelas = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses ke kelas ini",
-        });
+        return errorResponse(res, "Anda tidak memiliki akses ke kelas ini", 403);
       }
     }
 
@@ -187,13 +186,14 @@ export const getMateriByKelas = async (req, res) => {
       updated_at: m.updated_at,
     }));
 
-    res.json({
-      message: "Materi retrieved successfully",
-      materi: materiWithCount,
-    });
+    return successResponse(
+      res,
+      { materi: materiWithCount },
+      "Materi retrieved successfully"
+    );
   } catch (error) {
     console.error("Error fetching materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -237,7 +237,7 @@ export const getMateriById = async (req, res) => {
 
     if (error) throw error;
     if (!materi) {
-      return res.status(404).json({ error: "Materi tidak ditemukan" });
+      return errorResponse(res, "Materi tidak ditemukan", 404);
     }
 
     // Verify access if guru
@@ -252,9 +252,7 @@ export const getMateriById = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses ke materi ini",
-        });
+        return errorResponse(res, "Anda tidak memiliki akses ke materi ini", 403);
       }
     }
 
@@ -263,13 +261,14 @@ export const getMateriById = async (req, res) => {
       materi.sub_materi.sort((a, b) => a.urutan - b.urutan);
     }
 
-    res.json({
-      message: "Materi retrieved successfully",
-      materi,
-    });
+    return successResponse(
+      res,
+      { materi },
+      "Materi retrieved successfully"
+    );
   } catch (error) {
     console.error("Error fetching materi by ID:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -283,9 +282,7 @@ export const createMateri = async (req, res) => {
 
     // Validation
     if (!kelas_id || !judul_materi) {
-      return res.status(400).json({
-        error: "kelas_id dan judul_materi wajib diisi",
-      });
+      return errorResponse(res, "kelas_id dan judul_materi wajib diisi", 400);
     }
 
     // Verify kelas exists
@@ -296,7 +293,7 @@ export const createMateri = async (req, res) => {
       .single();
 
     if (kelasError || !kelas) {
-      return res.status(404).json({ error: "Kelas tidak ditemukan" });
+      return errorResponse(res, "Kelas tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -311,9 +308,7 @@ export const createMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak mengajar di kelas ini",
-        });
+        return errorResponse(res, "Anda tidak mengajar di kelas ini", 403);
       }
     }
 
@@ -332,13 +327,15 @@ export const createMateri = async (req, res) => {
 
     if (insertError) throw insertError;
 
-    res.status(201).json({
-      message: "Materi created successfully",
-      materi,
-    });
+    return successResponse(
+      res,
+      { materi },
+      "Materi created successfully",
+      201
+    );
   } catch (error) {
     console.error("Error creating materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -353,9 +350,7 @@ export const updateMateri = async (req, res) => {
 
     // Validation
     if (!judul_materi) {
-      return res.status(400).json({
-        error: "judul_materi wajib diisi",
-      });
+      return errorResponse(res, "judul_materi wajib diisi", 400);
     }
 
     // Get materi to check access
@@ -366,7 +361,7 @@ export const updateMateri = async (req, res) => {
       .single();
 
     if (fetchError || !materi) {
-      return res.status(404).json({ error: "Materi tidak ditemukan" });
+      return errorResponse(res, "Materi tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -381,9 +376,11 @@ export const updateMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses untuk mengubah materi ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses untuk mengubah materi ini",
+          403
+        );
       }
     }
 
@@ -400,13 +397,14 @@ export const updateMateri = async (req, res) => {
 
     if (updateError) throw updateError;
 
-    res.json({
-      message: "Materi updated successfully",
-      materi: updatedMateri,
-    });
+    return successResponse(
+      res,
+      { materi: updatedMateri },
+      "Materi updated successfully"
+    );
   } catch (error) {
     console.error("Error updating materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -426,7 +424,7 @@ export const deleteMateri = async (req, res) => {
       .single();
 
     if (fetchError || !materi) {
-      return res.status(404).json({ error: "Materi tidak ditemukan" });
+      return errorResponse(res, "Materi tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -441,9 +439,11 @@ export const deleteMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses untuk menghapus materi ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses untuk menghapus materi ini",
+          403
+        );
       }
     }
 
@@ -479,10 +479,10 @@ export const deleteMateri = async (req, res) => {
 
     if (deleteError) throw deleteError;
 
-    res.json({ message: "Materi deleted successfully" });
+    return successResponse(res, null, "Materi deleted successfully");
   } catch (error) {
     console.error("Error deleting materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -504,7 +504,7 @@ export const getSubMateriByMateri = async (req, res) => {
       .single();
 
     if (materiError || !materi) {
-      return res.status(404).json({ error: "Materi tidak ditemukan" });
+      return errorResponse(res, "Materi tidak ditemukan", 404);
     }
 
     // Verify access if guru
@@ -519,9 +519,11 @@ export const getSubMateriByMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses ke materi ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses ke materi ini",
+          403
+        );
       }
     }
 
@@ -550,13 +552,14 @@ export const getSubMateriByMateri = async (req, res) => {
 
     if (subError) throw subError;
 
-    res.json({
-      message: "Sub materi retrieved successfully",
-      sub_materi: subMateri || [],
-    });
+    return successResponse(
+      res,
+      { sub_materi: subMateri || [] },
+      "Sub materi retrieved successfully"
+    );
   } catch (error) {
     console.error("Error fetching sub materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -596,7 +599,7 @@ export const getSubMateriById = async (req, res) => {
 
     if (error) throw error;
     if (!subMateri) {
-      return res.status(404).json({ error: "Sub materi tidak ditemukan" });
+      return errorResponse(res, "Sub materi tidak ditemukan", 404);
     }
 
     // Verify access if guru
@@ -611,19 +614,22 @@ export const getSubMateriById = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses ke sub materi ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses ke sub materi ini",
+          403
+        );
       }
     }
 
-    res.json({
-      message: "Sub materi retrieved successfully",
-      sub_materi: subMateri,
-    });
+    return successResponse(
+      res,
+      { sub_materi: subMateri },
+      "Sub materi retrieved successfully"
+    );
   } catch (error) {
     console.error("Error fetching sub materi by ID:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -642,9 +648,11 @@ export const createSubMateri = async (req, res) => {
     // Validation
     const parsedUrutan = Number.parseInt(urutan, 10);
     if (!materi_id || !judul_sub_materi || Number.isNaN(parsedUrutan)) {
-      return res.status(400).json({
-        error: "materi_id, judul_sub_materi, dan urutan wajib diisi",
-      });
+      return errorResponse(
+        res,
+        "materi_id, judul_sub_materi, dan urutan wajib diisi",
+        400
+      );
     }
 
     const normalizedIsiMateri =
@@ -658,7 +666,7 @@ export const createSubMateri = async (req, res) => {
       .single();
 
     if (materiError || !materi) {
-      return res.status(404).json({ error: "Materi tidak ditemukan" });
+      return errorResponse(res, "Materi tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -673,9 +681,7 @@ export const createSubMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak mengajar di kelas ini",
-        });
+        return errorResponse(res, "Anda tidak mengajar di kelas ini", 403);
       }
     }
 
@@ -746,16 +752,20 @@ export const createSubMateri = async (req, res) => {
       }
     }
 
-    res.status(201).json({
-      message: "Sub materi created successfully",
-      sub_materi: {
-        ...subMateri,
-        sub_materi_media: uploadedMedia,
+    return successResponse(
+      res,
+      {
+        sub_materi: {
+          ...subMateri,
+          sub_materi_media: uploadedMedia,
+        },
       },
-    });
+      "Sub materi created successfully",
+      201
+    );
   } catch (error) {
     console.error("Error creating sub materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -770,9 +780,7 @@ export const updateSubMateri = async (req, res) => {
 
     // Validation
     if (!judul_sub_materi && !isi_materi && !urutan) {
-      return res.status(400).json({
-        error: "Minimal satu field harus diisi",
-      });
+      return errorResponse(res, "Minimal satu field harus diisi", 400);
     }
 
     // Get sub_materi to check access
@@ -790,7 +798,7 @@ export const updateSubMateri = async (req, res) => {
       .single();
 
     if (fetchError || !subMateri) {
-      return res.status(404).json({ error: "Sub materi tidak ditemukan" });
+      return errorResponse(res, "Sub materi tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -805,9 +813,11 @@ export const updateSubMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses untuk mengubah sub materi ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses untuk mengubah sub materi ini",
+          403
+        );
       }
     }
 
@@ -829,13 +839,14 @@ export const updateSubMateri = async (req, res) => {
 
     if (updateError) throw updateError;
 
-    res.json({
-      message: "Sub materi updated successfully",
-      sub_materi: updated,
-    });
+    return successResponse(
+      res,
+      { sub_materi: updated },
+      "Sub materi updated successfully"
+    );
   } catch (error) {
     console.error("Error updating sub materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -863,7 +874,7 @@ export const deleteSubMateri = async (req, res) => {
       .single();
 
     if (fetchError || !subMateri) {
-      return res.status(404).json({ error: "Sub materi tidak ditemukan" });
+      return errorResponse(res, "Sub materi tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -878,9 +889,11 @@ export const deleteSubMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses untuk menghapus sub materi ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses untuk menghapus sub materi ini",
+          403
+        );
       }
     }
 
@@ -899,10 +912,10 @@ export const deleteSubMateri = async (req, res) => {
 
     if (deleteError) throw deleteError;
 
-    res.json({ message: "Sub materi deleted successfully" });
+    return successResponse(res, null, "Sub materi deleted successfully");
   } catch (error) {
     console.error("Error deleting sub materi:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -921,20 +934,24 @@ export const uploadMedia = async (req, res) => {
 
     // Validation
     if (!file) {
-      return res.status(400).json({ error: "File wajib diupload" });
+      return errorResponse(res, "File wajib diupload", 400);
     }
 
     if (!["pdf", "video", "gambar"].includes(tipe_media)) {
-      return res.status(400).json({
-        error: "tipe_media harus pdf, video, atau gambar",
-      });
+      return errorResponse(
+        res,
+        "tipe_media harus pdf, video, atau gambar",
+        400
+      );
     }
 
     // Validate file type
     if (!validateFileType(file.originalname, tipe_media)) {
-      return res.status(400).json({
-        error: `File type tidak sesuai dengan tipe_media ${tipe_media}`,
-      });
+      return errorResponse(
+        res,
+        `File type tidak sesuai dengan tipe_media ${tipe_media}`,
+        400
+      );
     }
 
     // Get sub_materi to verify access
@@ -952,7 +969,7 @@ export const uploadMedia = async (req, res) => {
       .single();
 
     if (subError || !subMateri) {
-      return res.status(404).json({ error: "Sub materi tidak ditemukan" });
+      return errorResponse(res, "Sub materi tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -967,9 +984,7 @@ export const uploadMedia = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak mengajar di kelas ini",
-        });
+        return errorResponse(res, "Anda tidak mengajar di kelas ini", 403);
       }
     }
 
@@ -996,13 +1011,15 @@ export const uploadMedia = async (req, res) => {
 
     if (mediaError) throw mediaError;
 
-    res.status(201).json({
-      message: "Media uploaded successfully",
-      media,
-    });
+    return successResponse(
+      res,
+      { media },
+      "Media uploaded successfully",
+      201
+    );
   } catch (error) {
     console.error("Error uploading media:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -1033,7 +1050,7 @@ export const deleteMedia = async (req, res) => {
       .single();
 
     if (mediaError || !media) {
-      return res.status(404).json({ error: "Media tidak ditemukan" });
+      return errorResponse(res, "Media tidak ditemukan", 404);
     }
 
     // Verify guru teaches this kelas
@@ -1048,9 +1065,11 @@ export const deleteMedia = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses untuk menghapus media ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses untuk menghapus media ini",
+          403
+        );
       }
     }
 
@@ -1065,10 +1084,10 @@ export const deleteMedia = async (req, res) => {
 
     if (deleteError) throw deleteError;
 
-    res.json({ message: "Media deleted successfully" });
+    return successResponse(res, null, "Media deleted successfully");
   } catch (error) {
     console.error("Error deleting media:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -1095,7 +1114,7 @@ export const getMediaBySubMateri = async (req, res) => {
       .single();
 
     if (subError || !subMateri) {
-      return res.status(404).json({ error: "Sub materi tidak ditemukan" });
+      return errorResponse(res, "Sub materi tidak ditemukan", 404);
     }
 
     // Verify access if guru
@@ -1110,9 +1129,11 @@ export const getMediaBySubMateri = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses ke media ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses ke media ini",
+          403
+        );
       }
     }
 
@@ -1125,12 +1146,13 @@ export const getMediaBySubMateri = async (req, res) => {
 
     if (mediaError) throw mediaError;
 
-    res.json({
-      message: "Media retrieved successfully",
-      media: media || [],
-    });
+    return successResponse(
+      res,
+      { media: media || [] },
+      "Media retrieved successfully"
+    );
   } catch (error) {
     console.error("Error fetching media:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };

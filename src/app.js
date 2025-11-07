@@ -11,6 +11,10 @@ import kelasRoutes from "./routes/kelasRoutes.js";
 import sekolahRoutes from "./routes/sekolahRoutes.js";
 import materiRoutes from "./routes/materiRoutes.js";
 import soalRoutes from "./routes/soalRoutes.js";
+import kuisRoutes from "./routes/kuisRoutes.js";
+import hasilKuisRoutes from "./routes/hasilKuisRoutes.js";
+import detailJawabanRoutes from "./routes/detailJawabanRoutes.js";
+import analisisAiRoutes from "./routes/analisisAiRoutes.js";
 
 const app = express();
 
@@ -40,6 +44,14 @@ app.use("/api/materi", materiRoutes);
 console.log("✅ /api/materi registered");
 app.use("/api/soal", soalRoutes);
 console.log("✅ /api/soal registered");
+app.use("/api/kuis", kuisRoutes);
+console.log("✅ /api/kuis registered");
+app.use("/api/hasil-kuis", hasilKuisRoutes);
+console.log("✅ /api/hasil-kuis registered");
+app.use("/api/jawaban", detailJawabanRoutes);
+console.log("✅ /api/jawaban registered");
+app.use("/api/analisis", analisisAiRoutes);
+console.log("✅ /api/analisis registered");
 
 // 🔍 Test route untuk verify server berjalan
 app.get("/api/test", (req, res) => {
@@ -65,6 +77,10 @@ app.use((req, res) => {
       "/api/admins/*",
       "/api/materi/*",
       "/api/soal/*",
+      "/api/kuis/*",
+      "/api/hasil-kuis/*",
+      "/api/jawaban/*",
+      "/api/analisis/*",
     ],
   });
 });

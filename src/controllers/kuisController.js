@@ -1,0 +1,383 @@
+import { supabaseAdmin } from "../config/supabaseAdmin.js";
+import { successResponse, errorResponse } from "../utils/responseHelper.js";
+
+/**
+ * Membuat kuis baru
+ * POST /api/kuis
+ */
+export const createKuis = async (req, res) => {
+  try {
+    const { materi_id, judul, jumlah_soal } = req.body;
+    const guru_id = req.user.id;
+
+    // Validasi input
+    if (!materi_id || !judul || !jumlah_soal) {
+      return errorResponse(
+        res,
+        "materi_id, judul, dan jumlah_soal wajib diisi",
+        400
+      );
+    }
+
+    if (jumlah_soal <= 0) {
+      return errorResponse(res, "jumlah_soal harus lebih dari 0", 400);
+    }
+
+    // Cek apakah materi exists
+    const { data: materi, error: materiError } = await supabaseAdmin
+      .from("materi")
+      .select("id")
+      .eq("id", materi_id)
+      .single();
+
+    if (materiError || !materi) {
+      return errorResponse(res, "Materi tidak ditemukan", 404);
+    }
+
+    // PENTING: Cek apakah materi ini sudah memiliki kuis
+    const { data: existingKuis, error: existingError } = await supabaseAdmin
+      .from("kuis")
+      .select("id, judul")
+      .eq("materi_id", materi_id)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error("Error checking existing kuis:", existingError);
+      return errorResponse(res, "Gagal mengecek kuis yang ada", 500);
+    }
+
+    if (existingKuis) {
+      return errorResponse(
+        res,
+        `Materi ini sudah memiliki kuis "${existingKuis.judul}". Silakan edit kuis yang sudah ada.`,
+        400
+      );
+    }
+
+    // Cek apakah ada cukup soal di bank_soal untuk materi ini
+    const { count: totalSoal, error: countError } = await supabaseAdmin
+      .from("bank_soal")
+      .select("*", { count: "exact", head: true })
+      .eq("materi_id", materi_id);
+
+    if (countError) {
+      return errorResponse(res, "Gagal mengecek jumlah soal", 500);
+    }
+
+    if (totalSoal < jumlah_soal) {
+      return errorResponse(
+        res,
+        `Jumlah soal tidak mencukupi. Tersedia: ${totalSoal}, Diminta: ${jumlah_soal}`,
+        400
+      );
+    }
+
+    // Buat kuis baru
+    const { data: kuis, error: kuisError } = await supabaseAdmin
+      .from("kuis")
+      .insert({
+        materi_id,
+        guru_id,
+        judul,
+        jumlah_soal,
+      })
+      .select()
+      .single();
+
+    if (kuisError) {
+      console.error("Error creating kuis:", kuisError);
+      return errorResponse(res, "Gagal membuat kuis", 500);
+    }
+
+    return successResponse(res, kuis, "Kuis berhasil dibuat", 201);
+  } catch (error) {
+    console.error("Error in createKuis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Mendapatkan semua kuis
+ * GET /api/kuis
+ * Query params: guru_id, materi_id
+ */
+export const getAllKuis = async (req, res) => {
+  try {
+    const { guru_id, materi_id } = req.query;
+
+    let query = supabaseAdmin
+      .from("kuis")
+      .select(
+        `
+        *,
+        materi:materi!kuis_materi_id_fkey(
+          id,
+          judul_materi,
+          deskripsi
+        ),
+        guru:pengguna!kuis_guru_id_fkey(
+          id,
+          nama_lengkap
+        )
+      `
+      )
+      .order("created_at", { ascending: false });
+
+    // Filter by guru_id
+    if (guru_id) {
+      query = query.eq("guru_id", guru_id);
+    }
+
+    // Filter by materi_id
+    if (materi_id) {
+      query = query.eq("materi_id", materi_id);
+    }
+
+    const { data: kuis, error } = await query;
+
+    if (error) {
+      console.error("Error fetching kuis:", error);
+      return errorResponse(res, "Gagal mengambil data kuis", 500);
+    }
+
+    return successResponse(res, kuis, "Data kuis berhasil diambil");
+  } catch (error) {
+    console.error("Error in getAllKuis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Mendapatkan detail satu kuis
+ * GET /api/kuis/:id
+ */
+export const getKuisById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: kuis, error } = await supabaseAdmin
+      .from("kuis")
+      .select(
+        `
+        *,
+        materi:materi!kuis_materi_id_fkey(
+          id,
+          judul_materi,
+          deskripsi
+        ),
+        guru:pengguna!kuis_guru_id_fkey(
+          id,
+          nama_lengkap
+        )
+      `
+      )
+      .eq("id", id)
+      .single();
+
+    if (error || !kuis) {
+      return errorResponse(res, "Kuis tidak ditemukan", 404);
+    }
+
+    return successResponse(res, kuis, "Detail kuis berhasil diambil");
+  } catch (error) {
+    console.error("Error in getKuisById:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Update kuis
+ * PUT /api/kuis/:id
+ */
+export const updateKuis = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { judul, jumlah_soal } = req.body;
+    const guru_id = req.user.id;
+
+    // Cek apakah kuis exists dan milik guru ini
+    const { data: existingKuis, error: checkError } = await supabaseAdmin
+      .from("kuis")
+      .select("*")
+      .eq("id", id)
+      .eq("guru_id", guru_id)
+      .single();
+
+    if (checkError || !existingKuis) {
+      return errorResponse(
+        res,
+        "Kuis tidak ditemukan atau Anda tidak memiliki akses",
+        404
+      );
+    }
+
+    // Prepare update data
+    const updateData = {};
+    if (judul) updateData.judul = judul;
+    if (jumlah_soal) {
+      if (jumlah_soal <= 0) {
+        return errorResponse(res, "jumlah_soal harus lebih dari 0", 400);
+      }
+
+      // Cek ketersediaan soal
+      const { count: totalSoal } = await supabaseAdmin
+        .from("bank_soal")
+        .select("*", { count: "exact", head: true })
+        .eq("materi_id", existingKuis.materi_id);
+
+      if (totalSoal < jumlah_soal) {
+        return errorResponse(
+          res,
+          `Jumlah soal tidak mencukupi. Tersedia: ${totalSoal}, Diminta: ${jumlah_soal}`,
+          400
+        );
+      }
+
+      updateData.jumlah_soal = jumlah_soal;
+    }
+
+    updateData.updated_at = new Date().toISOString();
+
+    // Update kuis
+    const { data: updatedKuis, error: updateError } = await supabaseAdmin
+      .from("kuis")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error("Error updating kuis:", updateError);
+      return errorResponse(res, "Gagal mengupdate kuis", 500);
+    }
+
+    return successResponse(res, updatedKuis, "Kuis berhasil diupdate");
+  } catch (error) {
+    console.error("Error in updateKuis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Delete kuis
+ * DELETE /api/kuis/:id
+ */
+export const deleteKuis = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const guru_id = req.user.id;
+
+    // Cek apakah kuis exists dan milik guru ini
+    const { data: existingKuis, error: checkError } = await supabaseAdmin
+      .from("kuis")
+      .select("*")
+      .eq("id", id)
+      .eq("guru_id", guru_id)
+      .single();
+
+    if (checkError || !existingKuis) {
+      return errorResponse(
+        res,
+        "Kuis tidak ditemukan atau Anda tidak memiliki akses",
+        404
+      );
+    }
+
+    // Delete kuis (CASCADE akan menghapus hasil_kuis_siswa dan detail_jawaban_siswa)
+    const { error: deleteError } = await supabaseAdmin
+      .from("kuis")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      console.error("Error deleting kuis:", deleteError);
+      return errorResponse(res, "Gagal menghapus kuis", 500);
+    }
+
+    return successResponse(res, null, "Kuis berhasil dihapus");
+  } catch (error) {
+    console.error("Error in deleteKuis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Mendapatkan soal untuk kuis (adaptif)
+ * GET /api/kuis/:id/soal
+ * Query params: current_level (optional, default: level3)
+ */
+export const getSoalForKuis = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { current_level } = req.query;
+
+    // Ambil info kuis
+    const { data: kuis, error: kuisError } = await supabaseAdmin
+      .from("kuis")
+      .select("materi_id, jumlah_soal")
+      .eq("id", id)
+      .single();
+
+    if (kuisError || !kuis) {
+      return errorResponse(res, "Kuis tidak ditemukan", 404);
+    }
+
+    // Tentukan level soal yang akan diambil
+    const levelSoal = current_level || "level3"; // Default level 3 untuk soal pertama
+
+    // Ambil soal dari bank_soal berdasarkan materi dan level
+    // TODO: Nanti ini akan diintegrasikan dengan logika rule-based
+    const { data: soal, error: soalError } = await supabaseAdmin
+      .from("bank_soal")
+      .select(
+        `
+        id,
+        soal_teks,
+        soal_gambar,
+        level_soal,
+        tipe_jawaban,
+        durasi_soal,
+        penjelasan,
+        gambar_pendukung_jawaban
+      `
+      )
+      .eq("materi_id", kuis.materi_id)
+      .eq("level_soal", levelSoal)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (soalError) {
+      console.error("Error fetching soal:", soalError);
+      return errorResponse(res, "Gagal mengambil soal", 500);
+    }
+
+    if (!soal || soal.length === 0) {
+      return errorResponse(
+        res,
+        `Tidak ada soal dengan level ${levelSoal} untuk materi ini`,
+        404
+      );
+    }
+
+    // Ambil jawaban untuk soal ini
+    const { data: jawaban, error: jawabanError } = await supabaseAdmin
+      .from("jawaban_soal")
+      .select("*")
+      .eq("soal_id", soal[0].id)
+      .order("created_at", { ascending: true });
+
+    if (jawabanError) {
+      console.error("Error fetching jawaban:", jawabanError);
+    }
+
+    const result = {
+      ...soal[0],
+      jawaban: jawaban || [],
+    };
+
+    return successResponse(res, result, "Soal berhasil diambil");
+  } catch (error) {
+    console.error("Error in getSoalForKuis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};

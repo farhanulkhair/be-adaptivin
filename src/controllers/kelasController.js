@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../config/supabaseAdmin.js";
+import { successResponse, errorResponse } from "../utils/responseHelper.js";
 
 const kelasColumns = `
   id,
@@ -97,10 +98,11 @@ export const getAllKelas = async (req, res) => {
         student_profiles: studentProfiles[kelas.id] || [],
       }));
 
-      return res.json({
-        message: "Kelas retrieved successfully",
-        kelas: enrichedKelas,
-      });
+      return successResponse(
+        res,
+        { kelas: enrichedKelas },
+        "Kelas retrieved successfully"
+      );
     }
 
     let query = supabaseAdmin
@@ -110,9 +112,11 @@ export const getAllKelas = async (req, res) => {
 
     if (role === "admin") {
       if (!userSekolahId) {
-        return res
-          .status(400)
-          .json({ error: "Admin belum terhubung dengan sekolah manapun" });
+        return errorResponse(
+          res,
+          "Admin belum terhubung dengan sekolah manapun",
+          400
+        );
       }
       query = query.eq("sekolah_id", userSekolahId);
     } else if (sekolahIdQuery) {
@@ -172,12 +176,13 @@ export const getAllKelas = async (req, res) => {
       student_profiles: studentProfiles[kelas.id] || [],
     }));
 
-    res.json({
-      message: "Kelas retrieved successfully",
-      kelas: enrichedKelas,
-    });
+    return successResponse(
+      res,
+      { kelas: enrichedKelas },
+      "Kelas retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -203,15 +208,19 @@ export const createKelas = async (req, res) => {
     const resolvedSekolahId = role === "admin" ? userSekolahId : sekolah_id;
 
     if (!sanitizedNama || !sanitizedTingkat || !resolvedSekolahId) {
-      return res.status(400).json({
-        error: "Field nama_kelas, tingkat_kelas, dan sekolah_id wajib",
-      });
+      return errorResponse(
+        res,
+        "Field nama_kelas, tingkat_kelas, dan sekolah_id wajib",
+        400
+      );
     }
 
     if (role === "admin" && !userSekolahId) {
-      return res
-        .status(400)
-        .json({ error: "Admin belum terhubung dengan sekolah manapun" });
+      return errorResponse(
+        res,
+        "Admin belum terhubung dengan sekolah manapun",
+        400
+      );
     }
 
     const { data, error } = await supabaseAdmin
@@ -232,12 +241,14 @@ export const createKelas = async (req, res) => {
 
     if (error) throw error;
 
-    res.status(201).json({
-      message: "Kelas created successfully",
-      kelas: data,
-    });
+    return successResponse(
+      res,
+      { kelas: data },
+      "Kelas created successfully",
+      201
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -254,13 +265,11 @@ export const getKelasById = async (req, res) => {
 
     if (error) throw error;
     if (!data) {
-      return res.status(404).json({ error: "Kelas tidak ditemukan" });
+      return errorResponse(res, "Kelas tidak ditemukan", 404);
     }
 
     if (role === "admin" && data.sekolah_id !== userSekolahId) {
-      return res
-        .status(403)
-        .json({ error: "Anda tidak memiliki akses ke kelas ini" });
+      return errorResponse(res, "Anda tidak memiliki akses ke kelas ini", 403);
     }
 
     if (role === "guru" || role === "siswa") {
@@ -273,18 +282,17 @@ export const getKelasById = async (req, res) => {
 
       if (membershipError) throw membershipError;
       if (!membership) {
-        return res
-          .status(403)
-          .json({ error: "Anda tidak terdaftar pada kelas ini" });
+        return errorResponse(res, "Anda tidak terdaftar pada kelas ini", 403);
       }
     }
 
-    res.json({
-      message: "Kelas retrieved successfully",
-      kelas: data,
-    });
+    return successResponse(
+      res,
+      { kelas: data },
+      "Kelas retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -309,14 +317,16 @@ export const updateKelas = async (req, res) => {
 
     if (existingError) throw existingError;
     if (!existingKelas) {
-      return res.status(404).json({ error: "Kelas tidak ditemukan" });
+      return errorResponse(res, "Kelas tidak ditemukan", 404);
     }
 
     if (role === "admin") {
       if (!userSekolahId || existingKelas.sekolah_id !== userSekolahId) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses untuk mengubah kelas ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses untuk mengubah kelas ini",
+          403
+        );
       }
     }
 
@@ -325,7 +335,7 @@ export const updateKelas = async (req, res) => {
     const sanitizedNama = sanitizeOptionalString(nama_kelas);
     if (sanitizedNama !== undefined) {
       if (sanitizedNama === null) {
-        return res.status(400).json({ error: "nama_kelas tidak boleh kosong" });
+        return errorResponse(res, "nama_kelas tidak boleh kosong", 400);
       }
       payload.nama_kelas = sanitizedNama;
     }
@@ -333,9 +343,7 @@ export const updateKelas = async (req, res) => {
     if (tingkat_kelas !== undefined) {
       const sanitizedTingkat = sanitizeRequiredString(tingkat_kelas);
       if (!sanitizedTingkat) {
-        return res
-          .status(400)
-          .json({ error: "tingkat_kelas tidak boleh kosong" });
+        return errorResponse(res, "tingkat_kelas tidak boleh kosong", 400);
       }
       payload.tingkat_kelas = sanitizedTingkat;
     }
@@ -352,7 +360,7 @@ export const updateKelas = async (req, res) => {
     if (role === "superadmin" && sekolah_id !== undefined) {
       const sanitizedSekolah = sanitizeRequiredString(sekolah_id);
       if (!sanitizedSekolah) {
-        return res.status(400).json({ error: "sekolah_id tidak boleh kosong" });
+        return errorResponse(res, "sekolah_id tidak boleh kosong", 400);
       }
       payload.sekolah_id = sanitizedSekolah;
     }
@@ -362,9 +370,7 @@ export const updateKelas = async (req, res) => {
     }
 
     if (Object.keys(payload).length === 0) {
-      return res
-        .status(400)
-        .json({ error: "Tidak ada perubahan yang dikirim" });
+      return errorResponse(res, "Tidak ada perubahan yang dikirim", 400);
     }
 
     payload.updated_at = new Date().toISOString();
@@ -378,12 +384,13 @@ export const updateKelas = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
-      message: "Kelas updated successfully",
-      kelas: data,
-    });
+    return successResponse(
+      res,
+      { kelas: data },
+      "Kelas updated successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -400,14 +407,16 @@ export const deleteKelas = async (req, res) => {
 
     if (existingError) throw existingError;
     if (!existingKelas) {
-      return res.status(404).json({ error: "Kelas tidak ditemukan" });
+      return errorResponse(res, "Kelas tidak ditemukan", 404);
     }
 
     if (role === "admin") {
       if (!userSekolahId || existingKelas.sekolah_id !== userSekolahId) {
-        return res.status(403).json({
-          error: "Anda tidak memiliki akses untuk menghapus kelas ini",
-        });
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses untuk menghapus kelas ini",
+          403
+        );
       }
     }
 
@@ -420,11 +429,12 @@ export const deleteKelas = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
-      message: "Kelas deleted successfully",
-      kelas: data,
-    });
+    return successResponse(
+      res,
+      { kelas: data },
+      "Kelas deleted successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };

@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabaseClient.js";
+import { successResponse, errorResponse } from "../utils/responseHelper.js";
 
 // 🟢 Superadmin bisa lihat semua sekolah, admin hanya sekolahnya
 export const getAllSekolah = async (req, res) => {
@@ -14,12 +15,13 @@ export const getAllSekolah = async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    res.json({
-      message: "Sekolah retrieved successfully",
-      sekolah: data,
-    });
+    return successResponse(
+      res,
+      { sekolah: data },
+      "Sekolah retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -30,9 +32,11 @@ export const createSekolah = async (req, res) => {
     const { nama_sekolah, alamat_sekolah } = req.body;
 
     if (role !== "superadmin") {
-      return res
-        .status(403)
-        .json({ error: "Hanya superadmin yang dapat membuat sekolah" });
+      return errorResponse(
+        res,
+        "Hanya superadmin yang dapat membuat sekolah",
+        403
+      );
     }
 
     const { data, error } = await supabase
@@ -42,12 +46,14 @@ export const createSekolah = async (req, res) => {
 
     if (error) throw error;
 
-    res.status(201).json({
-      message: "Sekolah created successfully",
-      sekolah: data[0],
-    });
+    return successResponse(
+      res,
+      { sekolah: data[0] },
+      "Sekolah created successfully",
+      201
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -58,9 +64,11 @@ export const getSekolahById = async (req, res) => {
     const { role, sekolah_id } = req.user || req.body;
 
     if (role !== "superadmin" && sekolah_id !== id) {
-      return res
-        .status(403)
-        .json({ error: "Hanya superadmin yang bisa melihat data detail sekolah" });
+      return errorResponse(
+        res,
+        "Hanya superadmin yang bisa melihat data detail sekolah",
+        403
+      );
     }
 
     const { data, error } = await supabase
@@ -71,12 +79,13 @@ export const getSekolahById = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
-      message: "Sekolah retrieved successfully",
-      sekolah: data,
-    });
+    return successResponse(
+      res,
+      { sekolah: data },
+      "Sekolah retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -88,9 +97,11 @@ export const updateSekolah = async (req, res) => {
     const { nama_sekolah, alamat_sekolah } = req.body;
 
     if (role !== "superadmin") {
-      return res
-        .status(403)
-        .json({ error: "Hanya superadmin yang dapat mengubah sekolah" });
+      return errorResponse(
+        res,
+        "Hanya superadmin yang dapat mengubah sekolah",
+        403
+      );
     }
 
     const { data, error } = await supabase
@@ -105,12 +116,13 @@ export const updateSekolah = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
-      message: "Sekolah updated successfully",
-      sekolah: data[0],
-    });
+    return successResponse(
+      res,
+      { sekolah: data[0] },
+      "Sekolah updated successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -121,9 +133,11 @@ export const deleteSekolah = async (req, res) => {
     const { id } = req.params;
 
     if (role !== "superadmin") {
-      return res
-        .status(403)
-        .json({ error: "Hanya superadmin yang dapat menghapus sekolah" });
+      return errorResponse(
+        res,
+        "Hanya superadmin yang dapat menghapus sekolah",
+        403
+      );
     }
 
     const { data, error } = await supabase
@@ -134,11 +148,12 @@ export const deleteSekolah = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
-      message: "Sekolah deleted successfully",
-      sekolah: data[0],
-    });
+    return successResponse(
+      res,
+      { sekolah: data[0] },
+      "Sekolah deleted successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };

@@ -1,12 +1,15 @@
 import { supabaseAdmin } from "../config/supabaseAdmin.js";
+import { successResponse, errorResponse } from "../utils/responseHelper.js";
 
 export const getAllAdmins = async (req, res) => {
   try {
     const { role } = req.user;
     if (role !== "superadmin") {
-      return res
-        .status(403)
-        .json({ error: "Hanya superadmin yang bisa mengakses data admin" });
+      return errorResponse(
+        res,
+        "Hanya superadmin yang bisa mengakses data admin",
+        403
+      );
     }
     const { data, error } = await supabaseAdmin
       .from("pengguna")
@@ -41,12 +44,13 @@ export const getAllAdmins = async (req, res) => {
       })
     );
 
-    res.json({
-      message: "Admins retrieved successfully",
-      admins: adminsWithEmail,
-    });
+    return successResponse(
+      res,
+      { admins: adminsWithEmail },
+      "Admins retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -54,9 +58,11 @@ export const createAdmin = async (req, res) => {
   try {
     const { role } = req.user;
     if (role !== "superadmin") {
-      return res.status(403).json({
-        error: "Hanya superadmin yang bisa menambah admin",
-      });
+      return errorResponse(
+        res,
+        "Hanya superadmin yang bisa menambah admin",
+        403
+      );
     }
 
     const { email, password, nama_lengkap, jenis_kelamin, sekolah_id } =
@@ -64,17 +70,20 @@ export const createAdmin = async (req, res) => {
 
     // Validasi field wajib
     if (!email || !password || !nama_lengkap || !sekolah_id) {
-      return res.status(400).json({
-        error:
-          "Field email, password, nama_lengkap, dan sekolah_id wajib diisi",
-      });
+      return errorResponse(
+        res,
+        "Field email, password, nama_lengkap, dan sekolah_id wajib diisi",
+        400
+      );
     }
 
     // Validasi ENUM jenis_kelamin
     if (jenis_kelamin && !["laki-laki", "perempuan"].includes(jenis_kelamin)) {
-      return res.status(400).json({
-        error: "jenis_kelamin harus 'laki-laki' atau 'perempuan'",
-      });
+      return errorResponse(
+        res,
+        "jenis_kelamin harus 'laki-laki' atau 'perempuan'",
+        400
+      );
     }
 
     // 1️⃣ STEP 1: Register user ke Supabase Auth
@@ -91,10 +100,11 @@ export const createAdmin = async (req, res) => {
 
     if (authError) {
       console.error("❌ Supabase Auth error:", authError);
-      return res.status(400).json({
-        error: "Gagal membuat akun auth",
-        details: authError.message,
-      });
+      return errorResponse(
+        res,
+        `Gagal membuat akun auth: ${authError.message}`,
+        400
+      );
     }
 
     // 2️⃣ STEP 2: Insert ke tabel pengguna dengan ID dari auth.users
@@ -118,27 +128,32 @@ export const createAdmin = async (req, res) => {
       // Rollback: Hapus user dari auth jika insert ke pengguna gagal
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
 
-      return res.status(400).json({
-        error: "Gagal menyimpan data pengguna",
-        details: userError.message,
-      });
+      return errorResponse(
+        res,
+        `Gagal menyimpan data pengguna: ${userError.message}`,
+        400
+      );
     }
 
-    res.status(201).json({
-      message: "Admin berhasil ditambahkan",
-      admin: {
-        id: userData[0].id,
-        nama_lengkap: userData[0].nama_lengkap,
-        jenis_kelamin: userData[0].jenis_kelamin,
-        sekolah_id: userData[0].sekolah_id,
-        role: userData[0].role,
-        created_at: userData[0].created_at,
-        email: authData.user?.email ?? email,
+    return successResponse(
+      res,
+      {
+        admin: {
+          id: userData[0].id,
+          nama_lengkap: userData[0].nama_lengkap,
+          jenis_kelamin: userData[0].jenis_kelamin,
+          sekolah_id: userData[0].sekolah_id,
+          role: userData[0].role,
+          created_at: userData[0].created_at,
+          email: authData.user?.email ?? email,
+        },
       },
-    });
+      "Admin berhasil ditambahkan",
+      201
+    );
   } catch (error) {
     console.error("❌ Error creating admin:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
 
@@ -146,7 +161,7 @@ export const updateAdmin = async (req, res) => {
   try {
     const { role } = req.user;
     if (role !== "superadmin") {
-      return res.status(403).json({ error: "Forbidden" });
+      return errorResponse(res, "Forbidden", 403);
     }
 
     const { id } = req.params;
@@ -161,7 +176,7 @@ export const updateAdmin = async (req, res) => {
       .select();
 
     if (error) {
-      return res.status(400).json({ error: error.message });
+      return errorResponse(res, error.message, 400);
     }
 
     // Optional: Update email/password di auth.users juga
@@ -183,15 +198,18 @@ export const updateAdmin = async (req, res) => {
       );
     }
 
-    res.json({
-      message: "Admin updated successfully",
-      admin: {
-        ...data[0],
-        email: authData?.user?.email ?? email ?? null,
+    return successResponse(
+      res,
+      {
+        admin: {
+          ...data[0],
+          email: authData?.user?.email ?? email ?? null,
+        },
       },
-    });
+      "Admin updated successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -199,9 +217,11 @@ export const getAdminById = async (req, res) => {
   try {
     const { role } = req.user;
     if (role !== "superadmin") {
-      return res
-        .status(403)
-        .json({ error: "Hanya superadmin yang bisa mengakses data admin" });
+      return errorResponse(
+        res,
+        "Hanya superadmin yang bisa mengakses data admin",
+        403
+      );
     }
 
     const { id } = req.params;
@@ -222,15 +242,18 @@ export const getAdminById = async (req, res) => {
       );
     }
 
-    res.json({
-      message: "Admin retrieved successfully",
-      user: {
-        ...data,
-        email: authData?.user?.email ?? null,
+    return successResponse(
+      res,
+      {
+        user: {
+          ...data,
+          email: authData?.user?.email ?? null,
+        },
       },
-    });
+      "Admin retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -238,7 +261,7 @@ export const deleteAdmin = async (req, res) => {
   try {
     const { role } = req.user;
     if (role !== "superadmin") {
-      return res.status(403).json({ error: "Forbidden" });
+      return errorResponse(res, "Forbidden", 403);
     }
 
     const { id } = req.params;
@@ -247,12 +270,12 @@ export const deleteAdmin = async (req, res) => {
     const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
 
     if (error) {
-      return res.status(400).json({ error: error.message });
+      return errorResponse(res, error.message, 400);
     }
 
-    res.json({ message: "Admin deleted successfully" });
+    return successResponse(res, null, "Admin deleted successfully");
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -282,15 +305,18 @@ export const getMyProfile = async (req, res) => {
       );
     }
 
-    res.json({
-      message: "Profile retrieved successfully",
-      admin: {
-        ...data,
-        email: authData?.user?.email ?? null,
+    return successResponse(
+      res,
+      {
+        admin: {
+          ...data,
+          email: authData?.user?.email ?? null,
+        },
       },
-    });
+      "Profile retrieved successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -314,7 +340,7 @@ export const updateMyProfile = async (req, res) => {
       .select();
 
     if (error) {
-      return res.status(400).json({ error: error.message });
+      return errorResponse(res, error.message, 400);
     }
 
     // Get email from auth.users
@@ -329,15 +355,18 @@ export const updateMyProfile = async (req, res) => {
       );
     }
 
-    res.json({
-      message: "Profile updated successfully",
-      admin: {
-        ...data[0],
-        email: authData?.user?.email ?? null,
+    return successResponse(
+      res,
+      {
+        admin: {
+          ...data[0],
+          email: authData?.user?.email ?? null,
+        },
       },
-    });
+      "Profile updated successfully"
+    );
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return errorResponse(res, error.message, 400);
   }
 };
 
@@ -349,15 +378,15 @@ export const updateMyPassword = async (req, res) => {
 
     // Validasi input
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        error: "currentPassword dan newPassword wajib diisi",
-      });
+      return errorResponse(
+        res,
+        "currentPassword dan newPassword wajib diisi",
+        400
+      );
     }
 
     if (newPassword.length < 8) {
-      return res.status(400).json({
-        error: "Password baru minimal 8 karakter",
-      });
+      return errorResponse(res, "Password baru minimal 8 karakter", 400);
     }
 
     // Get user email first
@@ -365,9 +394,7 @@ export const updateMyPassword = async (req, res) => {
       await supabaseAdmin.auth.admin.getUserById(userId);
 
     if (authError || !authData?.user?.email) {
-      return res.status(400).json({
-        error: "Gagal mendapatkan informasi user",
-      });
+      return errorResponse(res, "Gagal mendapatkan informasi user", 400);
     }
 
     // Verify current password by attempting to sign in
@@ -377,9 +404,7 @@ export const updateMyPassword = async (req, res) => {
     });
 
     if (signInError) {
-      return res.status(401).json({
-        error: "Password saat ini salah",
-      });
+      return errorResponse(res, "Password saat ini salah", 401);
     }
 
     // Update password via admin API
@@ -389,17 +414,16 @@ export const updateMyPassword = async (req, res) => {
       });
 
     if (updateError) {
-      return res.status(400).json({
-        error: "Gagal mengubah password",
-        details: updateError.message,
-      });
+      return errorResponse(
+        res,
+        `Gagal mengubah password: ${updateError.message}`,
+        400
+      );
     }
 
-    res.json({
-      message: "Password berhasil diubah",
-    });
+    return successResponse(res, null, "Password berhasil diubah");
   } catch (error) {
     console.error("❌ Error updating password:", error);
-    res.status(500).json({ error: error.message });
+    return errorResponse(res, error.message, 500);
   }
 };
