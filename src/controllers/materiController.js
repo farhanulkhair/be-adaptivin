@@ -11,7 +11,12 @@ import { successResponse, errorResponse } from "../utils/responseHelper.js";
  * @param {string} tipeMedia - Type of media ('pdf', 'video', 'gambar')
  * @returns {Promise<string>} - Public URL of uploaded file
  */
-export const uploadToStorage = async (fileBuffer, fileName, folder, tipeMedia) => {
+export const uploadToStorage = async (
+  fileBuffer,
+  fileName,
+  folder,
+  tipeMedia
+) => {
   try {
     // Generate unique filename
     const timestamp = Date.now();
@@ -152,7 +157,11 @@ export const getMateriByKelas = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return errorResponse(res, "Anda tidak memiliki akses ke kelas ini", 403);
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses ke kelas ini",
+          403
+        );
       }
     }
 
@@ -188,7 +197,7 @@ export const getMateriByKelas = async (req, res) => {
 
     return successResponse(
       res,
-      { materi: materiWithCount },
+      materiWithCount,
       "Materi retrieved successfully"
     );
   } catch (error) {
@@ -252,7 +261,11 @@ export const getMateriById = async (req, res) => {
 
       if (guruError) throw guruError;
       if (!guruKelas) {
-        return errorResponse(res, "Anda tidak memiliki akses ke materi ini", 403);
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses ke materi ini",
+          403
+        );
       }
     }
 
@@ -261,11 +274,7 @@ export const getMateriById = async (req, res) => {
       materi.sub_materi.sort((a, b) => a.urutan - b.urutan);
     }
 
-    return successResponse(
-      res,
-      { materi },
-      "Materi retrieved successfully"
-    );
+    return successResponse(res, { materi }, "Materi retrieved successfully");
   } catch (error) {
     console.error("Error fetching materi by ID:", error);
     return errorResponse(res, error.message, 500);
@@ -327,12 +336,7 @@ export const createMateri = async (req, res) => {
 
     if (insertError) throw insertError;
 
-    return successResponse(
-      res,
-      { materi },
-      "Materi created successfully",
-      201
-    );
+    return successResponse(res, { materi }, "Materi created successfully", 201);
   } catch (error) {
     console.error("Error creating materi:", error);
     return errorResponse(res, error.message, 500);
@@ -1011,12 +1015,7 @@ export const uploadMedia = async (req, res) => {
 
     if (mediaError) throw mediaError;
 
-    return successResponse(
-      res,
-      { media },
-      "Media uploaded successfully",
-      201
-    );
+    return successResponse(res, { media }, "Media uploaded successfully", 201);
   } catch (error) {
     console.error("Error uploading media:", error);
     return errorResponse(res, error.message, 500);

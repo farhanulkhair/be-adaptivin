@@ -61,6 +61,7 @@ export const createAnalisis = async (req, res) => {
     const savedAnalisis = await saveAnalysisResult(
       hasilKuisId,
       hasilKuis.kuis.materi_id,
+      hasilKuis.siswa_id,
       aiResponse
     );
 
@@ -73,6 +74,60 @@ export const createAnalisis = async (req, res) => {
   } catch (error) {
     console.error("Error in createAnalisis:", error);
     return errorResponse(res, error.message || "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Mengecek apakah hasil kuis sudah dianalisis atau belum
+ * GET /api/analisis/check/:hasilKuisId
+ */
+export const checkAnalisisStatus = async (req, res) => {
+  try {
+    const { hasilKuisId } = req.params;
+
+    // Cek hasil kuis
+    const { data: hasilKuis, error: hasilError } = await supabaseAdmin
+      .from("hasil_kuis_siswa")
+      .select("id, selesai")
+      .eq("id", hasilKuisId)
+      .single();
+
+    if (hasilError || !hasilKuis) {
+      console.error("Error fetching hasil kuis:", hasilError);
+      return errorResponse(res, "Hasil kuis tidak ditemukan", 404);
+    }
+
+    // Cek apakah ada analisis untuk hasil kuis ini
+    const { data: analisis, error: analisisError } = await supabaseAdmin
+      .from("analisis_ai")
+      .select("id, created_at")
+      .eq("hasil_kuis_id", hasilKuisId)
+      .maybeSingle();
+
+    if (analisisError) {
+      console.error("Error checking analisis:", analisisError);
+    }
+
+    const hasAnalisis = analisis !== null;
+
+    console.log("=== CHECK ANALISIS STATUS (BACKEND) ===");
+    console.log("hasil_kuis_id:", hasilKuisId);
+    console.log("Analisis found:", analisis);
+    console.log("hasAnalisis:", hasAnalisis);
+
+    return successResponse(
+      res,
+      {
+        hasil_kuis_id: hasilKuisId,
+        is_analyzed: hasAnalisis,
+        analisis_id: hasAnalisis ? analisis.id : null,
+        is_completed: hasilKuis.selesai,
+      },
+      "Status analisis berhasil dicek"
+    );
+  } catch (error) {
+    console.error("Error in checkAnalisisStatus:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
   }
 };
 

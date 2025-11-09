@@ -1,0 +1,183 @@
+-- 1️⃣ ENUM untuk jenis kelamin
+-- CREATE TYPE gender_type AS ENUM ('laki-laki', 'perempuan');
+
+-- 2️⃣ Tabel pengguna
+-- CREATE TABLE IF NOT EXISTS public.pengguna (
+--   id uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+--   creator_id uuid NOT NULL REFERENCES pengguna(id) ON DELETE SET NULL;
+--   sekolah_id uuid NOT NULL REFERENCES sekolah(id) ON DELETE SET NULL;
+--   karakter_id uuid references public.pilih_karakter(id) on delete set null;
+--   email text NOT NULL UNIQUE,
+--   password text NOT NULL,
+--   nama_lengkap text NOT NULL,
+--   alamat text,
+--   tanggal_lahir date,
+--   role text CHECK (role IN ('superadmin', 'admin', 'guru', 'siswa')) NOT NULL,
+--   nip text,
+--   nisn text,
+--   jenis_kelamin gender_type,
+--   profil_siswa_index integer,
+--   created_at timestamptz DEFAULT now(),
+--   updated_at timestamptz DEFAULT now(),
+  
+--   -- Optional: validasi tambahan biar lebih rapi
+--   CONSTRAINT nip_nisn_check CHECK (
+--     (role = 'guru' AND nip IS NOT NULL AND nisn IS NULL)
+--     OR (role = 'siswa' AND nisn IS NOT NULL AND nip IS NULL)
+--     OR (role IN ('admin', 'superadmin'))
+--   )
+-- );
+
+-- 3️⃣ Table pilih Karakter Siswa
+-- CREATE TABLE IF NOT EXISTS public.pilih_karakter (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   index int not null,
+--   karakter_url text not null,
+--   poto_profil_url text not null
+-- )
+
+-- 4️⃣ Table Sekolah
+-- CREATE TABLE IF NOT EXISTS public.sekolah (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   nama_sekolah text NOT NULL,
+--   alamat_sekolah text,
+--   creator_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE,
+--   created_at timestamptz DEFAULT now(),
+--   updated_at timestamptz DEFAULT now()
+-- );
+
+-- 5️⃣ Table Kelas 
+-- CREATE TABLE IF NOT EXISTS public.kelas (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   sekolah_id uuid NOT NULL REFERENCES public.sekolah(id) ON DELETE CASCADE,
+--   creator_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE;
+--   nama_kelas text NOT NULL,
+--   tingkat_kelas text NOT NULL,
+--   rombel text,
+--   mata_pelajaran text,
+--   tahun_ajaran text,
+--   created_at timestamptz DEFAULT now(),
+--   updated_at timestamptz DEFAULT now()
+-- );
+
+-- 6️⃣ Table relasi kelas dan user
+-- CREATE TABLE IF NOT EXISTS public.kelas_users (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   kelas_id uuid NOT NULL REFERENCES public.kelas(id) ON DELETE CASCADE,
+--   pengguna_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE,
+--   role_dalam_kelas text CHECK (role_dalam_kelas IN ('guru', 'siswa')),
+--   joined_at timestamptz DEFAULT now(),
+--   UNIQUE (kelas_id, pengguna_id)
+-- );
+
+-- 7️⃣ Table Materi
+-- CREATE TABLE IF NOT EXISTS public.materi (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   kelas_id uuid NOT NULL REFERENCES public.kelas(id) ON DELETE CASCADE,
+--   judul_materi TEXT NOT NULL,
+--   deskripsi TEXT,
+--   created_at TIMESTAMPTZ DEFAULT now(),
+--   updated_at TIMESTAMPTZ DEFAULT now()
+-- );
+
+-- 8️⃣ Table Sub Materi
+-- CREATE TABLE IF NOT EXISTS public.sub_materi (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   materi_id uuid NOT NULL REFERENCES public.materi(id) ON DELETE CASCADE,
+--   judul_sub_materi TEXT NOT NULL,
+--   isi_materi TEXT NOT NULL,
+--   urutan INT DEFAULT 1,
+--   created_at TIMESTAMPTZ DEFAULT now(),
+--   updated_at TIMESTAMPTZ DEFAULT now()
+-- );
+
+-- 9️⃣ Table Media Sub Materi
+-- CREATE TABLE IF NOT EXISTS public.sub_materi_media (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   sub_materi_id uuid not null references public.sub_materi(id) on delete cascade,
+--   tipe_media text CHECK (tipe_media in ('pdf', 'video', 'gambar')),
+--   url TEXT NOT NULL,
+--   created_at TIMESTAMPTZ DEFAULT now()
+-- )
+
+-- 🔟 Type data untuk tipe soal dan tipe jawaban
+-- CREATE TYPE type_soal AS ENUM ('level1', 'level2', 'level3', 'level4', 'level5', 'level6');
+-- CREATE TYPE type_jawaban AS ENUM ('pilihan_ganda', 'pilihan_ganda_kompleks', 'isian_singkat');
+
+-- 1️⃣1️⃣ Table Bank Soal
+-- CREATE TABLE IF NOT EXISTS public.bank_soal (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   materi_id uuid NOT NULL REFERENCES public.materi(id) ON DELETE CASCADE,
+--   level_soal type_soal NOT NULL,
+--   tipe_jawaban type_jawaban NOT NULL,
+--   soal_teks text NOT NULL,
+--   soal_gambar text,
+--   penjelasan text,
+--   gambar_pendukung_jawaban text,
+--   durasi_soal int NOT NULL CHECK (durasi_soal > 0),
+--   created_at timestamptz DEFAULT now(),
+--   updated_at timestamptz DEFAULT now()
+-- );
+
+-- 1️⃣2️⃣ Table Jawaban Soal
+-- CREATE TABLE IF NOT EXISTS public.jawaban_soal (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   soal_id uuid NOT NULL REFERENCES public.bank_soal(id) ON DELETE CASCADE,
+--   isi_jawaban text NOT NULL, -- isi teks atau angka (disimpan sebagai string)
+--   is_benar boolean DEFAULT false, -- hanya true untuk jawaban benar
+--   created_at timestamptz DEFAULT now()
+-- );
+
+-- 1️⃣2️⃣ Table Kuis
+-- CREATE TABLE IF NOT EXISTS public.kuis (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   materi_id uuid NOT NULL REFERENCES public.materi(id) ON DELETE CASCADE,
+--   guru_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE,
+--   judul text NOT NULL,
+--   jumlah_soal int NOT NULL CHECK (jumlah_soal > 0),
+--   created_at timestamptz DEFAULT now(),
+--   updated_at timestamptz DEFAULT now()
+-- );
+
+-- 1️⃣3️⃣ Table Hasil Kuis
+-- CREATE TABLE IF NOT EXISTS public.hasil_kuis_siswa (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   kuis_id uuid NOT NULL REFERENCES public.kuis(id) ON DELETE CASCADE,
+--   siswa_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE,
+--   total_benar int,
+--   poin_akumulatif int default 0,
+--   total_salah int,
+--   total_waktu int, -- total durasi yang dihabiskan siswa
+--   selesai boolean DEFAULT false,
+--   created_at timestamptz DEFAULT now()
+-- );
+
+-- 1️⃣4️⃣ Table Detail Jawaban Per soal di kuis
+-- CREATE TABLE IF NOT EXISTS public.detail_jawaban_siswa (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   hasil_kuis_id uuid NOT NULL REFERENCES public.hasil_kuis_siswa(id) ON DELETE CASCADE,
+--   soal_id uuid NOT NULL REFERENCES public.bank_soal(id) ON DELETE CASCADE,
+--   jawaban_id uuid REFERENCES public.jawaban_soal(id) ON DELETE SET NULL,
+--   level_soal type_soal NOT NULL,
+--   tipe_jawaban type_jawaban,
+--   jawaban_siswa text NOT NULL,
+--   benar boolean NOT NULL,
+--   waktu_dijawab int NOT NULL, -- waktu aktual (detik)
+--   created_at timestamptz DEFAULT now()
+-- );
+
+-- 1️⃣5️⃣ Table Hasil Analisis AI
+-- CREATE TABLE IF NOT EXISTS public.analisis_ai (
+--   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+--   hasil_kuis_id uuid NOT NULL REFERENCES public.hasil_kuis_siswa(id) ON DELETE CASCADE,
+--   materi_id uuid NOT NULL REFERENCES public.materi(id),
+--   analisis text NOT NULL, -- hasil analisis utama dari AI
+--   level_tertinggi type_soal,
+--   level_terendah type_soal,
+--   kelebihan text,
+--   kelemahan text,
+--   rekomendasi_belajar text,
+--   rekomendasi_video text, -- misal link video atau array JSON
+--   created_at timestamptz DEFAULT now()
+-- );
+

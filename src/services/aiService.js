@@ -395,16 +395,23 @@ function generateMockAnalysis(data) {
  * Menyimpan hasil analisis AI ke database
  * @param {string} hasilKuisId - ID hasil kuis
  * @param {string} materiId - ID materi
+ * @param {string} siswaId - ID siswa
  * @param {Object} analisisData - Data hasil analisis AI
  * @returns {Object} Data analisis yang tersimpan
  */
-async function saveAnalysisResult(hasilKuisId, materiId, analisisData) {
+async function saveAnalysisResult(
+  hasilKuisId,
+  materiId,
+  siswaId,
+  analisisData
+) {
   try {
     const { data, error } = await supabaseAdmin
       .from("analisis_ai")
       .insert({
         hasil_kuis_id: hasilKuisId,
         materi_id: materiId,
+        siswa_id: siswaId,
         analisis: analisisData.analisis,
         level_tertinggi: analisisData.level_tertinggi,
         level_terendah: analisisData.level_terendah,

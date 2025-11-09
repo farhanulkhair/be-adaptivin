@@ -33,17 +33,32 @@ export const createHasilKuis = async (req, res) => {
     // Cek apakah siswa sudah pernah mengerjakan kuis ini
     const { data: existingHasil } = await supabaseAdmin
       .from("hasil_kuis_siswa")
-      .select("id")
+      .select("id, selesai, created_at")
       .eq("kuis_id", kuis_id)
       .eq("siswa_id", siswa_id)
-      .eq("selesai", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (existingHasil) {
-      return errorResponse(res, "Anda sudah menyelesaikan kuis ini", 400);
+    // PERBAIKAN: Hanya resume jika belum selesai
+    // Jika sudah selesai, buat sesi baru (allow retry)
+    if (existingHasil && !existingHasil.selesai) {
+      console.log("✅ Resuming existing quiz session:", existingHasil.id);
+      return successResponse(
+        res,
+        existingHasil,
+        "Melanjutkan kuis yang belum selesai",
+        200
+      );
     }
 
-    // Buat hasil kuis baru
+    // Buat hasil kuis baru jika belum ada
+    console.log(
+      "🆕 Creating new quiz session for siswa:",
+      siswa_id,
+      "kuis:",
+      kuis_id
+    );
     const { data: hasilKuis, error: hasilError } = await supabaseAdmin
       .from("hasil_kuis_siswa")
       .insert({
@@ -52,6 +67,7 @@ export const createHasilKuis = async (req, res) => {
         total_benar: 0,
         total_salah: 0,
         total_waktu: 0,
+        poin_akumulatif: 0,
         selesai: false,
       })
       .select()
@@ -230,6 +246,40 @@ export const getHasilKuisBySiswa = async (req, res) => {
 };
 
 /**
+ * Check apakah siswa sudah pernah mengerjakan kuis ini
+ * GET /api/hasil-kuis/check/:kuisId
+ */
+export const checkKuisStatus = async (req, res) => {
+  try {
+    const { kuisId } = req.params;
+    const siswa_id = req.user.id;
+
+    // Cek apakah siswa sudah pernah mengerjakan kuis ini (selesai)
+    const { data: completedKuis } = await supabaseAdmin
+      .from("hasil_kuis_siswa")
+      .select("id, created_at, total_benar, total_salah, total_waktu")
+      .eq("kuis_id", kuisId)
+      .eq("siswa_id", siswa_id)
+      .eq("selesai", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return successResponse(
+      res,
+      {
+        hasPreviousAttempt: !!completedKuis,
+        previousAttempt: completedKuis,
+      },
+      "Status kuis berhasil diambil"
+    );
+  } catch (error) {
+    console.error("Error in checkKuisStatus:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
  * Mendapatkan semua hasil kuis (untuk guru/admin)
  * GET /api/hasil-kuis
  * Query params: kuis_id, siswa_id
@@ -279,6 +329,64 @@ export const getAllHasilKuis = async (req, res) => {
     return successResponse(res, hasilKuis, "Data hasil kuis berhasil diambil");
   } catch (error) {
     console.error("Error in getAllHasilKuis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Get riwayat kuis siswa berdasarkan materi_id
+ * GET /api/hasil-kuis/riwayat/materi/:materiId
+ */
+export const getRiwayatKuisByMateri = async (req, res) => {
+  try {
+    const { materiId } = req.params;
+    const siswa_id = req.user.id;
+
+    // Validasi input
+    if (!materiId) {
+      return errorResponse(res, "materiId wajib diisi", 400);
+    }
+
+    // Ambil riwayat kuis yang sudah selesai untuk materi ini
+    const { data: hasilKuis, error } = await supabaseAdmin
+      .from("hasil_kuis_siswa")
+      .select(
+        `
+        id,
+        kuis_id,
+        siswa_id,
+        total_benar,
+        total_salah,
+        total_waktu,
+        selesai,
+        poin_akumulatif,
+        created_at,
+        updated_at,
+        kuis:kuis!hasil_kuis_siswa_kuis_id_fkey(
+          materi_id
+        )
+      `
+      )
+      .eq("siswa_id", siswa_id)
+      .eq("selesai", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching riwayat kuis:", error);
+      return errorResponse(res, "Gagal mengambil riwayat kuis", 500);
+    }
+
+    // Filter by materi_id (karena kita tidak bisa filter langsung di nested relation)
+    const filteredHasil = (hasilKuis || []).filter(
+      (hasil) => hasil.kuis?.materi_id === materiId
+    );
+
+    // Remove nested kuis object before sending
+    const cleanedHasil = filteredHasil.map(({ kuis, ...rest }) => rest);
+
+    return successResponse(res, cleanedHasil, "Riwayat kuis berhasil diambil");
+  } catch (error) {
+    console.error("Error in getRiwayatKuisByMateri:", error);
     return errorResponse(res, "Terjadi kesalahan server", 500);
   }
 };

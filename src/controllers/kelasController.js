@@ -57,7 +57,8 @@ export const getAllKelas = async (req, res) => {
         // Get student data dengan foto profil (limit 3 per kelas untuk preview)
         const { data: siswaData, error: siswaError } = await supabaseAdmin
           .from("kelas_users")
-          .select(`
+          .select(
+            `
             kelas_id,
             pengguna:pengguna!kelas_users_pengguna_id_fkey (
               id,
@@ -65,7 +66,8 @@ export const getAllKelas = async (req, res) => {
                 poto_profil_url
               )
             )
-          `)
+          `
+          )
           .in("kelas_id", kelasIds)
           .eq("role_dalam_kelas", "siswa");
 
@@ -84,7 +86,9 @@ export const getAllKelas = async (req, res) => {
               acc[row.kelas_id] = [];
             }
             if (acc[row.kelas_id].length < 3) {
-              const profileUrl = row.pengguna?.karakter?.poto_profil_url || "/siswa/foto-profil/kocheng-oren.svg";
+              const profileUrl =
+                row.pengguna?.karakter?.poto_profil_url ||
+                "/siswa/foto-profil/kocheng-oren.svg";
               acc[row.kelas_id].push(profileUrl);
             }
             return acc;
@@ -100,7 +104,7 @@ export const getAllKelas = async (req, res) => {
 
       return successResponse(
         res,
-        { kelas: enrichedKelas },
+        enrichedKelas,
         "Kelas retrieved successfully"
       );
     }
@@ -135,7 +139,8 @@ export const getAllKelas = async (req, res) => {
       // Get student data dengan foto profil (limit 3 per kelas untuk preview)
       const { data: siswaData, error: siswaError } = await supabaseAdmin
         .from("kelas_users")
-        .select(`
+        .select(
+          `
           kelas_id,
           pengguna:pengguna!kelas_users_pengguna_id_fkey (
             id,
@@ -143,7 +148,8 @@ export const getAllKelas = async (req, res) => {
               poto_profil_url
             )
           )
-        `)
+        `
+        )
         .in("kelas_id", kelasIds)
         .eq("role_dalam_kelas", "siswa");
 
@@ -162,7 +168,9 @@ export const getAllKelas = async (req, res) => {
             acc[row.kelas_id] = [];
           }
           if (acc[row.kelas_id].length < 3) {
-            const profileUrl = row.pengguna?.karakter?.poto_profil_url || "/siswa/foto-profil/kocheng-oren.svg";
+            const profileUrl =
+              row.pengguna?.karakter?.poto_profil_url ||
+              "/siswa/foto-profil/kocheng-oren.svg";
             acc[row.kelas_id].push(profileUrl);
           }
           return acc;
@@ -176,11 +184,7 @@ export const getAllKelas = async (req, res) => {
       student_profiles: studentProfiles[kelas.id] || [],
     }));
 
-    return successResponse(
-      res,
-      { kelas: enrichedKelas },
-      "Kelas retrieved successfully"
-    );
+    return successResponse(res, enrichedKelas, "Kelas retrieved successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -241,12 +245,7 @@ export const createKelas = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { kelas: data },
-      "Kelas created successfully",
-      201
-    );
+    return successResponse(res, data, "Kelas created successfully", 201);
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -286,11 +285,7 @@ export const getKelasById = async (req, res) => {
       }
     }
 
-    return successResponse(
-      res,
-      { kelas: data },
-      "Kelas retrieved successfully"
-    );
+    return successResponse(res, data, "Kelas retrieved successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -384,11 +379,7 @@ export const updateKelas = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { kelas: data },
-      "Kelas updated successfully"
-    );
+    return successResponse(res, data, "Kelas updated successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -429,11 +420,7 @@ export const deleteKelas = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { kelas: data },
-      "Kelas deleted successfully"
-    );
+    return successResponse(res, data, "Kelas deleted successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }

@@ -46,7 +46,7 @@ export const getAllAdmins = async (req, res) => {
 
     return successResponse(
       res,
-      { admins: adminsWithEmail },
+      adminsWithEmail,
       "Admins retrieved successfully"
     );
   } catch (error) {

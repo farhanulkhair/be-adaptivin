@@ -15,11 +15,7 @@ export const getAllSekolah = async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { sekolah: data },
-      "Sekolah retrieved successfully"
-    );
+    return successResponse(res, data, "Sekolah retrieved successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -46,12 +42,7 @@ export const createSekolah = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { sekolah: data[0] },
-      "Sekolah created successfully",
-      201
-    );
+    return successResponse(res, data[0], "Sekolah created successfully", 201);
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -79,11 +70,7 @@ export const getSekolahById = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { sekolah: data },
-      "Sekolah retrieved successfully"
-    );
+    return successResponse(res, data, "Sekolah retrieved successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -116,11 +103,7 @@ export const updateSekolah = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { sekolah: data[0] },
-      "Sekolah updated successfully"
-    );
+    return successResponse(res, data[0], "Sekolah updated successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }
@@ -148,11 +131,7 @@ export const deleteSekolah = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(
-      res,
-      { sekolah: data[0] },
-      "Sekolah deleted successfully"
-    );
+    return successResponse(res, data[0], "Sekolah deleted successfully");
   } catch (error) {
     return errorResponse(res, error.message, 400);
   }

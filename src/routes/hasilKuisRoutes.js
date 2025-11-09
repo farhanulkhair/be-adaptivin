@@ -5,6 +5,8 @@ import {
   getHasilKuisById,
   finishHasilKuis,
   getHasilKuisBySiswa,
+  checkKuisStatus,
+  getRiwayatKuisByMateri,
 } from "../controllers/hasilKuisController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 
@@ -17,6 +19,8 @@ router.get("/:id", authMiddleware, getHasilKuisById); // Ambil detail hasil kuis
 router.put("/:id/selesai", authMiddleware, finishHasilKuis); // Tandai kuis selesai
 
 // Endpoint khusus
+router.get("/riwayat/materi/:materiId", authMiddleware, getRiwayatKuisByMateri); // Riwayat kuis by materi
+router.get("/check/:kuisId", authMiddleware, checkKuisStatus); // Check status kuis siswa
 router.get("/siswa/:siswaId", authMiddleware, getHasilKuisBySiswa); // Ambil semua hasil kuis siswa
 
 export default router;

@@ -201,7 +201,7 @@ export const getAllUsers = async (req, res) => {
         );
         return successResponse(
           res,
-          { users: [] },
+          [],
           "Admin belum terhubung dengan sekolah manapun"
         );
       }
@@ -228,7 +228,7 @@ export const getAllUsers = async (req, res) => {
 
     return successResponse(
       res,
-      { users: enrichedUsers.map(serializeManagedUser) },
+      enrichedUsers.map(serializeManagedUser),
       "Users retrieved successfully"
     );
   } catch (error) {
@@ -273,7 +273,7 @@ export const getUserById = async (req, res) => {
 
     return successResponse(
       res,
-      { user: serializeManagedUser(enrichedUser) },
+      serializeManagedUser(enrichedUser),
       "User retrieved successfully"
     );
   } catch (error) {
@@ -463,7 +463,7 @@ export const updateUser = async (req, res) => {
 
     return successResponse(
       res,
-      { user: serializeManagedUser(enrichedUser ?? null) },
+      serializeManagedUser(enrichedUser ?? null),
       "User updated successfully"
     );
   } catch (error) {
@@ -528,7 +528,7 @@ export const deleteUser = async (req, res) => {
 
     return successResponse(
       res,
-      { user: serializeManagedUser(enrichedUser ?? null) },
+      serializeManagedUser(enrichedUser ?? null),
       "User deleted successfully"
     );
   } catch (error) {
@@ -572,7 +572,7 @@ export const getMyProfile = async (req, res) => {
 
     return successResponse(
       res,
-      { user: serializeManagedUser(enrichedUser) },
+      serializeManagedUser(enrichedUser),
       "Profile retrieved successfully"
     );
   } catch (error) {
@@ -641,13 +641,8 @@ export const updateMyPassword = async (req, res) => {
 export const updateMyProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const {
-      nama_lengkap,
-      alamat,
-      tanggal_lahir,
-      jenis_kelamin,
-      karakter_id,
-    } = req.body;
+    const { nama_lengkap, alamat, tanggal_lahir, jenis_kelamin, karakter_id } =
+      req.body;
 
     // Build update object
     const updateData = {};
@@ -723,7 +718,7 @@ export const updateMyProfile = async (req, res) => {
 
     return successResponse(
       res,
-      { user: serializeManagedUser(enrichedUser) },
+      serializeManagedUser(enrichedUser),
       "Profile updated successfully"
     );
   } catch (error) {
@@ -923,7 +918,7 @@ export const createUser = async (req, res) => {
 
     return successResponse(
       res,
-      { user: serializeManagedUser(enrichedUser ?? null) },
+      serializeManagedUser(enrichedUser ?? null),
       "User created successfully",
       201
     );
@@ -958,7 +953,11 @@ export const getSiswaByKelas = async (req, res) => {
 
       if (guruKelasError) throw guruKelasError;
       if (!guruKelas) {
-        return errorResponse(res, "Anda tidak memiliki akses ke kelas ini", 403);
+        return errorResponse(
+          res,
+          "Anda tidak memiliki akses ke kelas ini",
+          403
+        );
       }
     } else if (requesterRole === "siswa") {
       // Siswa can only see classmates
@@ -978,12 +977,11 @@ export const getSiswaByKelas = async (req, res) => {
     // Admin and superadmin can access all classes
 
     // Get all siswa in this kelas
-    const { data: kelasUsersData, error: kelasUsersError } =
-      await supabaseAdmin
-        .from("kelas_users")
-        .select("pengguna_id")
-        .eq("kelas_id", kelasId)
-        .eq("role_dalam_kelas", "siswa");
+    const { data: kelasUsersData, error: kelasUsersError } = await supabaseAdmin
+      .from("kelas_users")
+      .select("pengguna_id")
+      .eq("kelas_id", kelasId)
+      .eq("role_dalam_kelas", "siswa");
 
     if (kelasUsersError) throw kelasUsersError;
 

@@ -309,7 +309,13 @@ export const deleteKuis = async (req, res) => {
 export const getSoalForKuis = async (req, res) => {
   try {
     const { id } = req.params;
-    const { current_level } = req.query;
+    const { current_level, hasil_kuis_id } = req.query;
+
+    console.log("📖 getSoalForKuis called:", {
+      kuis_id: id,
+      current_level,
+      hasil_kuis_id,
+    });
 
     // Ambil info kuis
     const { data: kuis, error: kuisError } = await supabaseAdmin
@@ -325,9 +331,25 @@ export const getSoalForKuis = async (req, res) => {
     // Tentukan level soal yang akan diambil
     const levelSoal = current_level || "level3"; // Default level 3 untuk soal pertama
 
-    // Ambil soal dari bank_soal berdasarkan materi dan level
-    // TODO: Nanti ini akan diintegrasikan dengan logika rule-based
-    const { data: soal, error: soalError } = await supabaseAdmin
+    // Ambil list soal_id yang sudah pernah ditampilkan (sudah dijawab)
+    let excludedSoalIds = [];
+    if (hasil_kuis_id) {
+      const { data: answeredSoals } = await supabaseAdmin
+        .from("detail_jawaban_siswa")
+        .select("soal_id")
+        .eq("hasil_kuis_id", hasil_kuis_id);
+
+      if (answeredSoals && answeredSoals.length > 0) {
+        excludedSoalIds = answeredSoals.map((a) => a.soal_id);
+        console.log(
+          "🚫 Excluding already answered soals:",
+          excludedSoalIds.length
+        );
+      }
+    }
+
+    // Build query untuk ambil soal
+    let query = supabaseAdmin
       .from("bank_soal")
       .select(
         `
@@ -342,16 +364,23 @@ export const getSoalForKuis = async (req, res) => {
       `
       )
       .eq("materi_id", kuis.materi_id)
-      .eq("level_soal", levelSoal)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .eq("level_soal", levelSoal);
+
+    // Exclude soal yang sudah pernah muncul
+    if (excludedSoalIds.length > 0) {
+      query = query.not("id", "in", `(${excludedSoalIds.join(",")})`);
+    }
+
+    // Fetch all available soals
+    const { data: availableSoals, error: soalError } = await query;
 
     if (soalError) {
-      console.error("Error fetching soal:", soalError);
+      console.error("❌ Error fetching soal:", soalError);
       return errorResponse(res, "Gagal mengambil soal", 500);
     }
 
-    if (!soal || soal.length === 0) {
+    if (!availableSoals || availableSoals.length === 0) {
+      console.log("⚠️ No soal available for level:", levelSoal);
       return errorResponse(
         res,
         `Tidak ada soal dengan level ${levelSoal} untuk materi ini`,
@@ -359,25 +388,48 @@ export const getSoalForKuis = async (req, res) => {
       );
     }
 
-    // Ambil jawaban untuk soal ini
-    const { data: jawaban, error: jawabanError } = await supabaseAdmin
-      .from("jawaban_soal")
-      .select("*")
-      .eq("soal_id", soal[0].id)
-      .order("created_at", { ascending: true });
+    console.log(
+      `✅ Found ${availableSoals.length} available soals (level: ${levelSoal})`
+    );
 
-    if (jawabanError) {
-      console.error("Error fetching jawaban:", jawabanError);
+    // RANDOM selection untuk prevent pola yang sama
+    const randomIndex = Math.floor(Math.random() * availableSoals.length);
+    const selectedSoal = availableSoals[randomIndex];
+
+    console.log("🎲 Randomly selected soal:", {
+      id: selectedSoal.id,
+      tipe: selectedSoal.tipe_jawaban,
+      level: selectedSoal.level_soal,
+    });
+
+    // Ambil jawaban untuk soal ini (jika pilihan ganda)
+    let jawaban = [];
+    if (
+      selectedSoal.tipe_jawaban === "pilihan_ganda" ||
+      selectedSoal.tipe_jawaban === "pilihan_ganda_kompleks"
+    ) {
+      const { data: jawabanData, error: jawabanError } = await supabaseAdmin
+        .from("jawaban_soal")
+        .select("*")
+        .eq("soal_id", selectedSoal.id)
+        .order("created_at", { ascending: true });
+
+      if (jawabanError) {
+        console.error("❌ Error fetching jawaban:", jawabanError);
+      } else {
+        jawaban = jawabanData || [];
+        console.log(`📝 Loaded ${jawaban.length} jawaban options`);
+      }
     }
 
     const result = {
-      ...soal[0],
-      jawaban: jawaban || [],
+      ...selectedSoal,
+      jawaban,
     };
 
     return successResponse(res, result, "Soal berhasil diambil");
   } catch (error) {
-    console.error("Error in getSoalForKuis:", error);
+    console.error("❌ Error in getSoalForKuis:", error);
     return errorResponse(res, "Terjadi kesalahan server", 500);
   }
 };

@@ -109,6 +109,23 @@ function calculateLevelProgress(inputData) {
     lastAnswer.timeTaken,
     lastAnswer.medianTime
   );
+  const lastPoints = calculatePoints(lastAnswer.correct, lastSpeed);
+
+  // PERBAIKAN: Hitung poin HANYA dari jawaban terakhir untuk logika benar berturut-turut
+  // Poin akumulatif sekarang HANYA untuk tracking consecutive correct answers
+  let consecutivePoints = 0;
+
+  // Hitung consecutive correct answers dari belakang
+  for (let i = recentAnswers.length - 1; i >= 0; i--) {
+    if (!recentAnswers[i].correct) break; // Stop jika ketemu salah
+
+    const speed = categorizeSpeed(
+      recentAnswers[i].timeTaken,
+      recentAnswers[i].medianTime
+    );
+    const points = calculatePoints(recentAnswers[i].correct, speed);
+    consecutivePoints += points;
+  }
 
   // Cek konsistensi
   const consecutiveCorrect = countConsecutivePattern(recentAnswers, true);
@@ -134,25 +151,25 @@ function calculateLevelProgress(inputData) {
   let newLevel = currentLevel;
   let levelChange = "tetap";
   let reason = "";
-  let pointsAfterChange = totalPoints;
+  let pointsAfterChange = consecutivePoints; // Gunakan consecutive points, bukan totalPoints
 
   // === ATURAN NAIK LEVEL ===
 
-  // 1. NAIK 2 LEVEL: Benar + Cepat pada soal lebih sulit
+  // 1. NAIK 1 LEVEL: Benar + Cepat pada soal lebih sulit
   if (
     lastAnswer.correct &&
     lastSpeed === "cepat" &&
     lastAnswer.questionLevel > currentLevel &&
-    currentLevel < 5
+    currentLevel < 6
   ) {
-    newLevel = Math.min(currentLevel + 2, 6);
+    newLevel = Math.min(currentLevel + 1, 6);
     levelChange = "naik";
-    reason = `Benar + Cepat pada soal level ${lastAnswer.questionLevel} (lebih sulit) → Naik 2 level`;
+    reason = `Benar + Cepat pada soal level ${lastAnswer.questionLevel} (lebih sulit) → Naik 1 level`;
     pointsAfterChange = 0; // Reset poin
   }
 
   // 2. NAIK 1 LEVEL: Benar + Cepat (langsung)
-  else if (lastAnswer.correct && lastSpeed === "cepat") {
+  else if (lastAnswer.correct && lastSpeed === "cepat" && currentLevel < 6) {
     newLevel = Math.min(currentLevel + 1, 6);
     levelChange = "naik";
     reason = "Benar + Cepat → Naik 1 level";
@@ -160,78 +177,98 @@ function calculateLevelProgress(inputData) {
   }
 
   // 3. NAIK 1 LEVEL: 3x Benar + Sedang berturut-turut
-  else if (consecutiveMediumCorrect >= 3) {
+  else if (consecutiveMediumCorrect >= 3 && currentLevel < 6) {
     newLevel = Math.min(currentLevel + 1, 6);
     levelChange = "naik";
     reason = `3x Benar + Sedang berturut-turut → Naik 1 level`;
     pointsAfterChange = 0;
   }
 
-  // 4. NAIK 1 LEVEL: 3x Benar + Lambat berturut-turut (konsistensi)
-  else if (consecutiveSlowCorrect >= 3) {
+  // 4. NAIK 1 LEVEL: 5x Benar + Lambat berturut-turut (konsistensi mencapai 5+ poin)
+  // PERBAIKAN: Hanya naik level jika jawaban terakhir BENAR dan poin consecutive >= 5
+  else if (
+    lastAnswer.correct &&
+    consecutivePoints >= 5 &&
+    consecutiveSlowCorrect >= 3 &&
+    currentLevel < 6
+  ) {
     newLevel = Math.min(currentLevel + 1, 6);
     levelChange = "naik";
-    reason = `3x Benar + Lambat berturut-turut (konsistensi) → Naik 1 level`;
+    reason = `Benar berturut-turut dengan poin akumulatif ${consecutivePoints} (>= 5) → Naik 1 level`;
     pointsAfterChange = 0;
   }
 
-  // 5. NAIK 1 LEVEL: Poin >= 5 (STABILIZER)
-  else if (totalPoints >= 5) {
+  // 5. NAIK 1 LEVEL: Poin consecutive >= 5 (STABILIZER)
+  // PERBAIKAN: Block ini HANYA dieksekusi jika:
+  // - Jawaban terakhir BENAR
+  // - Poin consecutive (dari jawaban benar berturut-turut) >= 5
+  // - Tidak memenuhi kriteria kenaikan langsung sebelumnya
+  else if (lastAnswer.correct && consecutivePoints >= 5 && currentLevel < 6) {
     newLevel = Math.min(currentLevel + 1, 6);
     levelChange = "naik";
-    reason = `Poin akumulatif mencapai ${totalPoints} (>= 5) → Naik 1 level`;
+    reason = `Benar berturut-turut dengan poin akumulatif ${consecutivePoints} (>= 5) → Naik 1 level`;
     pointsAfterChange = 0;
   }
 
   // === ATURAN TURUN LEVEL ===
 
-  // 1. TURUN 2 LEVEL: Salah pada soal lebih mudah
+  // 1. TURUN 1 LEVEL: Salah pada soal lebih mudah
   else if (
     !lastAnswer.correct &&
     lastAnswer.questionLevel < currentLevel &&
-    currentLevel > 2
+    currentLevel > 1
   ) {
-    newLevel = Math.max(currentLevel - 2, 1);
+    newLevel = Math.max(currentLevel - 1, 1);
     levelChange = "turun";
-    reason = `Salah pada soal level ${lastAnswer.questionLevel} (lebih mudah) → Turun 2 level`;
-    pointsAfterChange = 0;
+    reason = `Salah pada soal level ${lastAnswer.questionLevel} (lebih mudah) → Turun 1 level`;
+    pointsAfterChange = 0; // RESET karena jawaban salah
   }
 
-  // 2. TURUN 1 LEVEL: Salah + Lambat
-  else if (!lastAnswer.correct && lastSpeed === "lambat") {
+  // 2. TURUN 1 LEVEL: Salah + Cepat (gegabah/terburu-buru)
+  else if (!lastAnswer.correct && lastSpeed === "cepat" && currentLevel > 1) {
+    newLevel = Math.max(currentLevel - 1, 1);
+    levelChange = "turun";
+    reason = "Salah + Cepat (gegabah) → Turun 1 level";
+    pointsAfterChange = 0; // RESET karena jawaban salah
+  }
+
+  // 3. TURUN 1 LEVEL: Salah + Lambat
+  else if (!lastAnswer.correct && lastSpeed === "lambat" && currentLevel > 1) {
     newLevel = Math.max(currentLevel - 1, 1);
     levelChange = "turun";
     reason = "Salah + Lambat → Turun 1 level";
-    pointsAfterChange = 0;
+    pointsAfterChange = 0; // RESET karena jawaban salah
   }
 
-  // 3. TURUN 1 LEVEL: 2x Salah berturut-turut
-  else if (consecutiveWrong >= 2) {
+  // 4. TURUN 1 LEVEL: 2x Salah berturut-turut
+  else if (consecutiveWrong >= 2 && currentLevel > 1) {
     newLevel = Math.max(currentLevel - 1, 1);
     levelChange = "turun";
     reason = `${consecutiveWrong}x Salah berturut-turut → Turun 1 level`;
-    pointsAfterChange = 0;
+    pointsAfterChange = 0; // RESET karena jawaban salah
   }
 
-  // 4. TURUN 1 LEVEL: Poin <= -3 (STABILIZER)
-  else if (totalPoints <= -3) {
-    newLevel = Math.max(currentLevel - 1, 1);
-    levelChange = "turun";
-    reason = `Poin akumulatif ${totalPoints} (<= -3) → Turun 1 level`;
-    pointsAfterChange = 0;
-  }
+  // 5. PERBAIKAN: Hapus aturan "Poin <= -3" karena sistem baru hanya tracking consecutive correct
+  // Poin negatif tidak lagi relevan dengan sistem "consecutive correct points"
 
   // === TETAP ===
   else {
     reason = buildStayReason(
       lastAnswer.correct,
       lastSpeed,
-      totalPoints,
+      consecutivePoints, // Gunakan consecutivePoints, bukan totalPoints
       consecutiveCorrect,
       consecutiveMediumCorrect,
       consecutiveSlowCorrect
     );
-    pointsAfterChange = totalPoints; // Poin tetap akumulatif
+
+    // PERBAIKAN: Reset poin ke 0 jika jawaban terakhir SALAH
+    // Poin hanya bertambah jika benar berturut-turut
+    if (!lastAnswer.correct) {
+      pointsAfterChange = 0;
+    } else {
+      pointsAfterChange = consecutivePoints; // Simpan poin consecutive jika tetap benar
+    }
   }
 
   return {

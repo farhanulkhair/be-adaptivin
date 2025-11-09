@@ -15,6 +15,7 @@ import kuisRoutes from "./routes/kuisRoutes.js";
 import hasilKuisRoutes from "./routes/hasilKuisRoutes.js";
 import detailJawabanRoutes from "./routes/detailJawabanRoutes.js";
 import analisisAiRoutes from "./routes/analisisAiRoutes.js";
+import laporanRoutes from "./routes/laporanRoutes.js";
 
 const app = express();
 
@@ -52,6 +53,8 @@ app.use("/api/jawaban", detailJawabanRoutes);
 console.log("✅ /api/jawaban registered");
 app.use("/api/analisis", analisisAiRoutes);
 console.log("✅ /api/analisis registered");
+app.use("/api/laporan", laporanRoutes);
+console.log("✅ /api/laporan registered");
 
 // 🔍 Test route untuk verify server berjalan
 app.get("/api/test", (req, res) => {
