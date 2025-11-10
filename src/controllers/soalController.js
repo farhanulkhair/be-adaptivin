@@ -112,12 +112,21 @@ const jawabanColumns = `
 
 /**
  * GET /api/soal
- * Get all soal (grouped by materi)
- * Query params: materi_id, level_soal, tipe_jawaban
+ * Get all soal (grouped by materi) filtered by kelas_id
+ * Query params: kelas_id (REQUIRED), materi_id, level_soal, tipe_jawaban
  */
 export const getAllSoal = async (req, res) => {
   try {
-    const { materi_id, level_soal, tipe_jawaban } = req.query;
+    const { kelas_id, materi_id, level_soal, tipe_jawaban } = req.query;
+
+    // Validasi kelas_id wajib untuk mem-filter soal sesuai kelas
+    if (!kelas_id) {
+      return errorResponse(
+        res,
+        "Parameter kelas_id wajib diisi untuk filter soal per kelas",
+        400
+      );
+    }
 
     let query = supabaseAdmin
       .from("bank_soal")
@@ -134,19 +143,20 @@ export const getAllSoal = async (req, res) => {
         )
       `
       )
+      .eq("materi.kelas_id", kelas_id) // Filter by kelas_id through materi relation
       .order("created_at", { ascending: false });
 
-    // Filter by materi_id
+    // Filter by materi_id (optional)
     if (materi_id) {
       query = query.eq("materi_id", materi_id);
     }
 
-    // Filter by level_soal
+    // Filter by level_soal (optional)
     if (level_soal) {
       query = query.eq("level_soal", level_soal);
     }
 
-    // Filter by tipe_jawaban
+    // Filter by tipe_jawaban (optional)
     if (tipe_jawaban) {
       query = query.eq("tipe_jawaban", tipe_jawaban);
     }
@@ -155,9 +165,12 @@ export const getAllSoal = async (req, res) => {
 
     if (error) throw error;
 
+    // Filter out soal where materi is null (jika ada orphan data)
+    const filteredData = data?.filter((soal) => soal.materi !== null) || [];
+
     return successResponse(
       res,
-      { data: data || [] },
+      { data: filteredData },
       "Berhasil mengambil data soal"
     );
   } catch (error) {
@@ -203,11 +216,7 @@ export const getSoalById = async (req, res) => {
       throw error;
     }
 
-    return successResponse(
-      res,
-      { data },
-      "Berhasil mengambil data soal"
-    );
+    return successResponse(res, { data }, "Berhasil mengambil data soal");
   } catch (error) {
     console.error("Error getting soal by ID:", error);
     return errorResponse(
@@ -250,18 +259,10 @@ export const getSoalCountByMateri = async (req, res) => {
       }
     });
 
-    return successResponse(
-      res,
-      { data: counts },
-      "Berhasil menghitung soal"
-    );
+    return successResponse(res, { data: counts }, "Berhasil menghitung soal");
   } catch (error) {
     console.error("Error counting soal:", error);
-    return errorResponse(
-      res,
-      `Gagal menghitung soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal menghitung soal: ${error.message}`, 500);
   }
 };
 
@@ -411,7 +412,8 @@ export const createSoal = async (req, res) => {
     }
 
     // Convert durasi dari menit ke detik
-    const durasiDetik = parseInt(durasi_soal) * 60;
+    // ⭐ Use parseFloat to handle decimal minutes (e.g., 1.25 menit = 75 detik)
+    const durasiDetik = Math.round(parseFloat(durasi_soal) * 60);
 
     // Insert soal
     const { data: soalData, error: soalError } = await supabaseAdmin
@@ -464,11 +466,7 @@ export const createSoal = async (req, res) => {
     );
   } catch (error) {
     console.error("Error creating soal:", error);
-    return errorResponse(
-      res,
-      `Gagal membuat soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal membuat soal: ${error.message}`, 500);
   }
 };
 
@@ -546,7 +544,9 @@ export const updateSoal = async (req, res) => {
     }
     if (soal_teks) updateData.soal_teks = soal_teks;
     if (penjelasan !== undefined) updateData.penjelasan = penjelasan;
-    if (durasi_soal) updateData.durasi_soal = parseInt(durasi_soal) * 60;
+    // ⭐ Use parseFloat to handle decimal minutes (e.g., 1.25 menit = 75 detik)
+    if (durasi_soal)
+      updateData.durasi_soal = Math.round(parseFloat(durasi_soal) * 60);
 
     // Handle image updates
     if (req.files?.soal_gambar?.[0]) {
@@ -674,11 +674,7 @@ export const updateSoal = async (req, res) => {
     );
   } catch (error) {
     console.error("Error updating soal:", error);
-    return errorResponse(
-      res,
-      `Gagal update soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal update soal: ${error.message}`, 500);
   }
 };
 
@@ -720,21 +716,29 @@ export const deleteSoal = async (req, res) => {
     return successResponse(res, null, "Berhasil menghapus soal");
   } catch (error) {
     console.error("Error deleting soal:", error);
-    return errorResponse(
-      res,
-      `Gagal menghapus soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal menghapus soal: ${error.message}`, 500);
   }
 };
 
 /**
  * GET /api/soal/materi-dropdown
- * Get list materi for dropdown
+ * Get list materi for dropdown filtered by kelas_id
+ * Query params: kelas_id (REQUIRED)
  */
 export const getMateriDropdown = async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { kelas_id } = req.query;
+
+    // Validasi kelas_id wajib untuk mem-filter materi sesuai kelas
+    if (!kelas_id) {
+      return errorResponse(
+        res,
+        "Parameter kelas_id wajib diisi untuk filter materi per kelas",
+        400
+      );
+    }
+
+    let query = supabaseAdmin
       .from("materi")
       .select(
         `
@@ -744,11 +748,15 @@ export const getMateriDropdown = async (req, res) => {
         kelas:kelas_id (
           id,
           nama_kelas,
-          tingkat_kelas
+          tingkat_kelas,
+          sekolah_id
         )
       `
       )
+      .eq("kelas_id", kelas_id) // Filter by kelas_id
       .order("created_at", { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

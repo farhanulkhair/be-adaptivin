@@ -85,7 +85,7 @@ export const createJawaban = async (req, res) => {
     // Cek apakah hasil kuis exists
     const { data: hasilKuis, error: hasilError } = await supabaseAdmin
       .from("hasil_kuis_siswa")
-      .select("id, selesai")
+      .select("id, selesai, kuis_id")
       .eq("id", hasil_kuis_id)
       .single();
 
@@ -94,12 +94,86 @@ export const createJawaban = async (req, res) => {
     }
 
     if (hasilKuis.selesai) {
+      // Cek apakah jawaban untuk soal ini sudah ada (race condition / double submit)
+      const { data: existingAnswer } = await supabaseAdmin
+        .from("detail_jawaban_siswa")
+        .select("id")
+        .eq("hasil_kuis_id", hasil_kuis_id)
+        .eq("soal_id", soal_id)
+        .maybeSingle();
+
+      if (existingAnswer) {
+        // Jawaban sudah ada, kembalikan success tanpa insert (idempotent)
+        console.log(
+          "⚠️ Kuis sudah selesai dan jawaban sudah ada, returning existing answer"
+        );
+        return successResponse(
+          res,
+          {
+            detail_jawaban: existingAnswer,
+            feedback: {
+              is_correct: false, // Tidak diproses
+              is_fast: false,
+              speed: "sedang",
+              next_level: "level3",
+              level_change: "tetap",
+              reasoning: "Kuis sudah selesai",
+              points: 0,
+              analysis: {},
+            },
+          },
+          "Kuis sudah selesai",
+          200
+        );
+      } else {
+        // Kuis selesai dan jawaban belum ada = invalid request
+        return errorResponse(
+          res,
+          "Kuis sudah selesai, tidak bisa menambah jawaban",
+          400
+        );
+      }
+    }
+
+    // ✅ VALIDASI: Cek apakah jumlah jawaban sudah mencapai batas jumlah_soal
+    const { data: kuis, error: kuisError } = await supabaseAdmin
+      .from("kuis")
+      .select("jumlah_soal")
+      .eq("id", hasilKuis.kuis_id)
+      .single();
+
+    if (kuisError || !kuis) {
+      return errorResponse(res, "Data kuis tidak ditemukan", 404);
+    }
+
+    // Hitung jumlah jawaban yang sudah ada
+    const { data: existingAnswers, error: countError } = await supabaseAdmin
+      .from("detail_jawaban_siswa")
+      .select("id", { count: "exact", head: false })
+      .eq("hasil_kuis_id", hasil_kuis_id);
+
+    if (countError) {
+      console.error("Error counting answers:", countError);
+      return errorResponse(res, "Gagal validasi jumlah soal", 500);
+    }
+
+    const currentAnswerCount = existingAnswers?.length || 0;
+
+    // Jika sudah mencapai batas, tolak request
+    if (currentAnswerCount >= kuis.jumlah_soal) {
+      console.warn(
+        `⚠️ Answer limit reached: ${currentAnswerCount}/${kuis.jumlah_soal}`
+      );
       return errorResponse(
         res,
-        "Kuis sudah selesai, tidak bisa menambah jawaban",
+        `Batas jumlah soal tercapai (${kuis.jumlah_soal} soal)`,
         400
       );
     }
+
+    console.log(
+      `✅ Answer count validation: ${currentAnswerCount + 1}/${kuis.jumlah_soal}`
+    );
 
     // Ambil data soal
     const { data: soal, error: soalError } = await supabaseAdmin
