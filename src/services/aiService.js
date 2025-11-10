@@ -466,4 +466,433 @@ async function saveAnalysisResult(
   }
 }
 
-export { prepareDataForAI, callAIAPI, saveAnalysisResult };
+/**
+ * Memanggil Gemini AI untuk analisis strategi pembelajaran GURU
+ * @param {Object} data - Data yang sudah disiapkan
+ * @returns {Object} Hasil analisis strategi pembelajaran untuk guru
+ */
+async function callAIAPIForTeacher(data) {
+  try {
+    // 1. Cari video YouTube untuk guru tentang GAYA PEMBELAJARAN (bukan konten materi)
+    console.log("🔍 Searching for teaching strategy videos...");
+
+    // Fokus pada teaching strategies, bukan materi
+    const teachingStrategyKeywords = [
+      "scaffolding teaching strategy",
+      "differentiated instruction techniques",
+      "formative assessment strategies",
+      "zone of proximal development teaching",
+      "strategi pembelajaran berdiferensiasi",
+      "teknik scaffolding mengajar"
+    ];
+
+    // Ambil video dari berbagai keyword
+    const videoPromises = teachingStrategyKeywords.map(keyword =>
+      searchEducationalVideos(keyword).catch(() => [])
+    );
+
+    const allVideos = await Promise.all(videoPromises);
+    const mergedVideos = allVideos.flat().slice(0, 5); // Ambil max 5 video
+    const formattedVideos = formatVideosForAnalysis(mergedVideos);
+
+    console.log("✅ Found teaching strategy videos:", formattedVideos.length);
+
+    // 2. Buat prompt khusus untuk analisis guru dengan tone profesional
+    const prompt = `
+Kamu adalah Mbah Adaptivin, konsultan pendidikan yang berpengalaman dan terpercaya untuk membantu guru SD kelas 4-5.
+Gunakan bahasa yang PROFESIONAL namun ACCESSIBLE, EVIDENCE-BASED, dan ACTIONABLE.
+
+ATURAN:
+- Gunakan istilah pedagogi tapi jelaskan dengan sederhana
+- Semua rekomendasi harus berdasarkan data konkret dari hasil kuis
+- Berikan strategi yang bisa langsung diterapkan di kelas
+- Rujuk teori pembelajaran (Vygotsky, Bloom, dll) jika relevan
+- Fokus pada differensiasi dan personalisasi pembelajaran
+
+📊 DATA HASIL KUIS SISWA:
+
+Materi: ${data.materiInfo.judul}
+Deskripsi: ${data.materiInfo.deskripsi}
+Judul Kuis: ${data.kuisInfo.judul}
+Total Soal: ${data.kuisInfo.total_soal}
+
+STATISTIK HASIL:
+- Jawaban Benar: ${data.hasilStatistik.total_benar} dari ${data.kuisInfo.total_soal} soal
+- Persentase: ${data.hasilStatistik.persentase.toFixed(1)}%
+- Total Waktu: ${data.hasilStatistik.total_waktu} detik
+- Rata-rata per soal: ${(data.hasilStatistik.total_waktu / data.kuisInfo.total_soal).toFixed(1)} detik
+
+ANALISIS LEVEL KESULITAN SOAL (1-6):
+- Level 1: Paling mudah (soal dasar)
+- Level 2: Mudah
+- Level 3: Sedang
+- Level 4: Cukup sulit
+- Level 5: Sulit
+- Level 6: Sangat sulit (paling tinggi)
+
+- Level yang dikuasai: ${data.levelAnalisis.level_benar.join(", ")}
+- Level yang belum dikuasai: ${data.levelAnalisis.level_salah.join(", ")}
+- Distribusi kesalahan: ${data.levelAnalisis.level_salah.reduce((acc, level) => {
+  acc[level] = (acc[level] || 0) + 1;
+  return acc;
+}, {})}
+
+POLA WAKTU PENGERJAAN:
+${data.waktuAnalisis
+  .map(
+    (w, i) =>
+      `Soal ${i + 1}: ${w.waktu_dijawab}/${w.waktu_ditentukan} detik (${
+        w.cepat ? "Cepat" : "Lambat"
+      })`
+  )
+  .join("\n")}
+
+DETAIL SETIAP SOAL:
+${data.detailSoal
+  .map(
+    (s, i) =>
+      `${i + 1}. Level ${s.level_soal} | ${s.benar ? "Benar" : "Salah"} | ${s.waktu_dijawab}/${s.waktu_ditentukan}s`
+  )
+  .join("\n")}
+
+---
+
+Berdasarkan data di atas, buatlah analisis strategi pembelajaran untuk GURU dalam format JSON yang LENGKAP dan DETAIL:
+
+{
+  "diagnosis_pembelajaran": "Analisis mendalam tentang kondisi pembelajaran siswa ini. Jelaskan apa yang terjadi dalam proses belajarnya berdasarkan data kuis (minimal 3-4 kalimat yang spesifik dan berdasarkan evidence dari data)",
+
+  "pola_belajar_siswa": "Identifikasi pola belajar yang terlihat dari cara siswa mengerjakan kuis. Apakah siswa cenderung terburu-buru? Konsisten? Kesulitan di level tertentu? (minimal 3-4 kalimat dengan contoh konkret dari data)",
+
+  "level_kemampuan_saat_ini": "levelX (tentukan berdasarkan level tertinggi yang dikuasai secara konsisten)",
+
+  "zona_proximal_development": "Jelaskan ZPD siswa berdasarkan teori Vygotsky - apa yang bisa siswa capai dengan bantuan guru/scaffolding? Level mana yang bisa dicapai selanjutnya? (3-4 kalimat yang spesifik)",
+
+  "rekomendasi_metode_mengajar": [
+    {
+      "nama": "Nama Metode 1",
+      "penjelasan": "Penjelasan detail cara implementasi metode ini di kelas untuk materi ${data.materiInfo.judul}. Sesuaikan dengan level kemampuan siswa dan ZPD-nya (4-5 kalimat)"
+    },
+    {
+      "nama": "Nama Metode 2",
+      "penjelasan": "Penjelasan detail cara implementasi metode ini di kelas (4-5 kalimat)"
+    },
+    {
+      "nama": "Nama Metode 3",
+      "penjelasan": "Penjelasan detail cara implementasi metode ini di kelas (4-5 kalimat)"
+    },
+    {
+      "nama": "Nama Metode 4",
+      "penjelasan": "Penjelasan detail cara implementasi metode ini di kelas (4-5 kalimat)"
+    },
+    {
+      "nama": "Nama Metode 5",
+      "penjelasan": "Penjelasan detail cara implementasi metode ini di kelas (4-5 kalimat)"
+    },
+    {
+      "nama": "Nama Metode 6",
+      "penjelasan": "Penjelasan detail cara implementasi metode ini di kelas (4-5 kalimat)"
+    }
+  ],
+
+CATATAN: rekomendasi_metode_mengajar HARUS berupa ARRAY of objects dengan field 'nama' dan 'penjelasan'. Pastikan metode disesuaikan dengan level kemampuan siswa (1-6) dan ZPD-nya.",
+
+  "strategi_differensiasi": {
+    "konten": "Jelaskan diferensiasi KONTEN untuk siswa ini - bagaimana menyesuaikan materi ${data.materiInfo.judul} sesuai level kemampuan siswa (4-5 kalimat dengan contoh konkret)",
+    "proses": "Jelaskan diferensiasi PROSES - bagaimana cara siswa belajar dan mengolah informasi tentang ${data.materiInfo.judul} (4-5 kalimat dengan contoh scaffolding, strategi, dan pendekatan yang sesuai)",
+    "produk": "Jelaskan diferensiasi PRODUK - bagaimana siswa dapat menunjukkan pemahaman mereka tentang ${data.materiInfo.judul} dengan cara yang berbeda (4-5 kalimat dengan contoh output/hasil karya yang bisa dibuat siswa)"
+  },
+
+CATATAN: strategi_differensiasi HARUS berupa OBJECT dengan 3 keys: 'konten', 'proses', dan 'produk'. Berikan penjelasan spesifik dan actionable untuk masing-masing aspek diferensiasi.",
+
+  "aktivitas_pembelajaran": [
+    {
+      "nama": "Nama Aktivitas 1",
+      "deskripsi": "Deskripsi detail cara melakukan aktivitas ini, step by step, disesuaikan dengan level siswa dan materi ${data.materiInfo.judul}",
+      "durasi": "20 menit",
+      "tujuan": "Tujuan pedagogis yang jelas dan terukur"
+    },
+    {
+      "nama": "Nama Aktivitas 2",
+      "deskripsi": "Deskripsi detail cara melakukan aktivitas ini, step by step",
+      "durasi": "30 menit",
+      "tujuan": "Tujuan pedagogis yang jelas dan terukur"
+    },
+    {
+      "nama": "Nama Aktivitas 3",
+      "deskripsi": "Deskripsi detail cara melakukan aktivitas ini, step by step",
+      "durasi": "15 menit",
+      "tujuan": "Tujuan pedagogis yang jelas dan terukur"
+    }
+  ],
+
+  "tips_praktis": [
+    "Tip 1: Penjelasan konkret yang spesifik untuk siswa ini dan materi ${data.materiInfo.judul}",
+    "Tip 2: Penjelasan konkret yang bisa langsung diterapkan besok di kelas",
+    "Tip 3: Penjelasan konkret dengan contoh praktis",
+    "Tip 4: Penjelasan konkret yang actionable",
+    "Tip 5: Penjelasan konkret yang relevan dengan level siswa",
+    "Tip 6: Penjelasan konkret (opsional)",
+    "Tip 7: Penjelasan konkret (opsional)"
+  ],
+
+CATATAN: tips_praktis HARUS berupa ARRAY of strings. Berikan 5-7 tips yang spesifik untuk siswa ini dan materinya, bukan tips umum.",
+
+  "indikator_progress": [
+    "Indikator 1: Penjelasan konkret cara mengukur kemajuan siswa dalam 2-4 minggu. Harus observable dan measurable",
+    "Indikator 2: Penjelasan konkret cara mengukurnya dengan metrik yang jelas",
+    "Indikator 3: Penjelasan konkret yang bisa diobservasi di kelas",
+    "Indikator 4: Penjelasan konkret yang terukur dan spesifik",
+    "Indikator 5: Penjelasan konkret (opsional)"
+  ],
+
+CATATAN: indikator_progress HARUS berupa ARRAY of strings. Berikan 4-5 indikator yang observable dan measurable.",
+
+  "rekomendasi_video_guru": ${formattedVideos.length > 0 ? JSON.stringify(formattedVideos) : '[]'}
+}
+
+INSTRUKSI KHUSUS UNTUK VIDEO REKOMENDASI:
+${formattedVideos.length > 0
+  ? `Mbah sudah menyiapkan ${formattedVideos.length} video tentang GAYA PEMBELAJARAN (teaching strategies) untuk guru:
+
+${formattedVideos.map((v, i) => `${i + 1}. "${v.judul}" - ${v.url}`).join('\n')}
+
+PENTING:
+- Video ini tentang METODE/STRATEGI MENGAJAR (scaffolding, differentiation, assessment, dll)
+- BUKAN tentang konten materi ${data.materiInfo.judul}
+- Pilih HANYA video yang RELEVAN dengan strategi yang kamu rekomendasikan
+- Jika TIDAK ADA video yang cocok, KOSONGKAN array: "rekomendasi_video_guru": []
+- Jangan paksa memasukkan video jika tidak relevan
+
+Gunakan video-video di atas untuk field "rekomendasi_video_guru" di output JSON kamu, tapi HANYA yang relevan.`
+  : `TIDAK ADA video teaching strategy yang ditemukan.
+Set "rekomendasi_video_guru" menjadi array KOSONG: []
+Jangan buat URL palsu atau video fiktif.`
+}
+
+PENTING:
+- Semua analisis harus BERDASARKAN DATA konkret dari hasil kuis
+- Jangan gunakan istilah yang terlalu teknis tanpa penjelasan
+- Fokus pada ACTIONABLE strategies yang bisa langsung diterapkan
+- Sesuaikan dengan konteks SD kelas 4-5 Indonesia
+- Gunakan contoh konkret dari materi ${data.materiInfo.judul}
+- Video rekomendasi: HANYA yang relevan dengan strategi pembelajaran, atau KOSONGKAN jika tidak ada
+`.trim();
+
+    console.log("🤖 Calling Gemini AI for teacher analysis...");
+
+    // Call Gemini AI
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    console.log("📝 Gemini AI Teacher Analysis Response:", text.substring(0, 500) + "...");
+
+    // Parse JSON response
+    let teacherAnalysis;
+    try {
+      // Clean response dari markdown code blocks
+      const cleanedText = text
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
+
+      teacherAnalysis = JSON.parse(cleanedText);
+
+      // Ensure aktivitas_pembelajaran is array
+      if (!Array.isArray(teacherAnalysis.aktivitas_pembelajaran)) {
+        teacherAnalysis.aktivitas_pembelajaran = [];
+      }
+
+      // Ensure rekomendasi_video_guru is array
+      if (!Array.isArray(teacherAnalysis.rekomendasi_video_guru)) {
+        teacherAnalysis.rekomendasi_video_guru = formattedVideos;
+      }
+
+    } catch (parseError) {
+      console.error("❌ Error parsing teacher analysis response:", parseError);
+      console.log("Raw response:", text);
+
+      // Fallback to mock data
+      teacherAnalysis = generateMockTeacherAnalysis(data, formattedVideos);
+    }
+
+    console.log("✅ Teacher analysis completed successfully");
+    return teacherAnalysis;
+
+  } catch (error) {
+    console.error("❌ Error calling Gemini AI for teacher:", error);
+
+    // Fallback to mock data
+    console.log("⚠️ Falling back to mock teacher analysis...");
+    return generateMockTeacherAnalysis(data, []);
+  }
+}
+
+/**
+ * Generate mock teacher analysis sebagai fallback
+ */
+function generateMockTeacherAnalysis(data, videos) {
+  const persentase = data.hasilStatistik.persentase;
+  const levelTertinggi = data.levelAnalisis.level_benar.length > 0
+    ? `level${Math.max(...data.levelAnalisis.level_benar.map(l => parseInt(l.replace("level", ""))))}`
+    : "level1";
+
+  return {
+    diagnosis_pembelajaran: `Berdasarkan hasil kuis "${data.kuisInfo.judul}" tentang ${data.materiInfo.judul}, siswa menunjukkan pencapaian ${persentase.toFixed(1)}% dengan ${data.hasilStatistik.total_benar} jawaban benar dari ${data.kuisInfo.total_soal} soal. ${persentase >= 70 ? "Siswa menunjukkan pemahaman yang cukup baik pada materi dasar" : "Terdapat gap pemahaman yang perlu ditangani"}, terutama pada ${data.levelAnalisis.level_salah.length > 0 ? "level " + data.levelAnalisis.level_salah.join(", ") : "beberapa level"}.`,
+
+    pola_belajar_siswa: `Siswa menunjukkan pola pengerjaan yang ${data.waktuAnalisis.filter(w => w.cepat).length > data.waktuAnalisis.length / 2 ? "cenderung terburu-buru" : "cukup hati-hati"}. Dari analisis waktu, terlihat siswa ${data.hasilStatistik.total_waktu < (data.waktuAnalisis.reduce((sum, w) => sum + w.waktu_ditentukan, 0) * 0.7) ? "menyelesaikan kuis lebih cepat dari waktu yang disediakan" : "menggunakan waktu dengan baik"}. Ini mengindikasikan ${persentase >= 70 ? "pemahaman yang cukup solid" : "perlu penguatan konsep dasar"}.`,
+
+    level_kemampuan_saat_ini: levelTertinggi,
+
+    zona_proximal_development: `Siswa saat ini berada di ${levelTertinggi} dan menunjukkan potensi untuk berkembang ke level berikutnya dengan scaffolding yang tepat. Dengan bimbingan guru dan latihan terstruktur, siswa dapat mencapai level yang lebih tinggi dalam 2-4 minggu. Fokus pada penguatan konsep yang belum dikuasai akan membantu siswa mencapai ZPD maksimal.`,
+
+    rekomendasi_metode_mengajar: [
+      {
+        nama: "Scaffolding Bertahap",
+        penjelasan: "Mulai dari konsep yang sudah dikuasai siswa (" + data.levelAnalisis.level_benar.join(", ") + "), kemudian secara bertahap tingkatkan kompleksitas. Gunakan analogi dan contoh konkret dari kehidupan sehari-hari untuk memudahkan pemahaman. Berikan bantuan (scaffolding) saat siswa menghadapi level yang lebih tinggi, lalu kurangi bantuan secara bertahap."
+      },
+      {
+        nama: "Think-Aloud Strategy",
+        penjelasan: "Saat mengajarkan konsep baru, verbalisasikan proses berpikir Anda. Ini membantu siswa memahami bagaimana cara menganalisis soal dan menemukan solusi. Modelkan cara berpikir kritis dan pemecahan masalah dengan suara keras agar siswa bisa meniru strategi berpikir yang efektif."
+      },
+      {
+        nama: "Error Analysis",
+        penjelasan: "Gunakan kesalahan siswa sebagai learning opportunity. Diskusikan kenapa jawaban tertentu salah dan apa konsep yang perlu diperbaiki. Ciptakan lingkungan yang aman dimana kesalahan dilihat sebagai bagian penting dari proses belajar, bukan kegagalan."
+      },
+      {
+        nama: "Collaborative Learning",
+        penjelasan: "Bentuk kelompok belajar heterogen dimana siswa yang sudah paham bisa membantu temannya. Ini memanfaatkan teori Vygotsky tentang Zone of Proximal Development. Dorong diskusi antar siswa untuk memperdalam pemahaman dan mengembangkan keterampilan komunikasi matematika."
+      },
+      {
+        nama: "Formative Assessment",
+        penjelasan: "Lakukan mini-assessment berkala (setiap 10-15 menit) untuk memastikan siswa mengikuti pembelajaran. Gunakan teknik quick check seperti thumbs up/down atau exit tickets. Gunakan hasil assessment untuk menyesuaikan pace dan metode pembelajaran secara real-time."
+      }
+    ],
+
+    strategi_differensiasi: {
+      konten: `Untuk siswa yang berada di ${levelTertinggi}, sediakan materi dengan tingkat kompleksitas yang sesuai. Mulai dengan konsep yang sudah dikuasai (${data.levelAnalisis.level_benar.join(", ")}), lalu secara bertahap tingkatkan ke level berikutnya. Berikan variasi soal dengan konteks yang berbeda-beda (kehidupan sehari-hari, permainan, situasi nyata) untuk memperkaya pemahaman. Sediakan enrichment berupa soal tantangan untuk topik yang sudah dikuasai, dan remedial berupa penjelasan ulang dengan pendekatan berbeda untuk konsep yang masih sulit.`,
+      proses: `Diferensiasi proses dapat dilakukan dengan memberikan pilihan cara belajar yang sesuai dengan gaya belajar siswa - visual (diagram, model gambar, video), auditori (penjelasan verbal, diskusi), atau kinestetik (manipulatif, hands-on activities). Gunakan scaffolding bertahap: berikan bantuan penuh di awal, lalu kurangi secara bertahap saat siswa mulai paham. Sesuaikan pace pembelajaran dengan kecepatan siswa - tidak terburu-buru untuk siswa yang butuh waktu lebih, dan berikan pengayaan untuk siswa yang cepat menguasai. Kelompokkan siswa secara fleksibel berdasarkan kebutuhan, bukan kemampuan tetap.`,
+      produk: `Berikan fleksibilitas dalam cara siswa menunjukkan pemahaman mereka. Siswa dapat memilih untuk mendemonstrasikan pemahaman melalui: (1) presentasi lisan di depan kelas, (2) membuat poster atau infografis visual, (3) menyelesaikan problem solving tertulis dengan penjelasan, (4) membuat video pembelajaran untuk teman, atau (5) mengajar konsep ke teman sekelas. Sesuaikan ekspektasi produk dengan level kemampuan - untuk siswa di ${levelTertinggi}, minta penjelasan yang lebih detail tentang proses berpikir mereka. Berikan rubrik yang jelas agar siswa tahu apa yang diharapkan.`
+    },
+
+    aktivitas_pembelajaran: [
+      {
+        nama: "Warm-up Review",
+        deskripsi: "Mulai dengan review konsep yang sudah dikuasai siswa melalui game interaktif atau kuis singkat. Ini membangun confidence dan mengaktifkan prior knowledge sebelum memperkenalkan konsep baru.",
+        durasi: "10 menit",
+        tujuan: "Mengaktivasi pengetahuan sebelumnya dan membangun confidence"
+      },
+      {
+        nama: "Guided Practice dengan Manipulatif",
+        deskripsi: "Gunakan benda konkret atau visual aids untuk menjelaskan konsep abstrak. Bimbing siswa step-by-step dengan modeling yang jelas, kemudian biarkan siswa mencoba dengan bimbingan minimal.",
+        durasi: "25 menit",
+        tujuan: "Membangun pemahaman konseptual melalui pengalaman hands-on"
+      },
+      {
+        nama: "Peer Teaching Session",
+        deskripsi: "Pasangkan siswa untuk saling mengajarkan konsep yang baru dipelajari. Siswa yang sudah paham menjelaskan ke temannya, sementara guru berkeliling memberikan support.",
+        durasi: "15 menit",
+        tujuan: "Memperdalam pemahaman melalui teaching dan collaborative learning"
+      }
+    ],
+
+    tips_praktis: [
+      "Mulai setiap sesi dengan quick review 5 menit untuk mengecek retention dan mengaktifkan prior knowledge",
+      "Gunakan visual aids dan manipulatif untuk konsep yang abstrak agar siswa bisa 'melihat' konsep matematika",
+      "Berikan immediate feedback saat siswa berlatih - jangan tunggu sampai akhir untuk koreksi",
+      "Sediakan lembar kerja dengan scaffolding bertahap (easy → medium → hard) sesuai level kemampuan siswa",
+      "Catat progress siswa dalam checklist sederhana untuk tracking perkembangan dari waktu ke waktu",
+      "Berikan praise yang spesifik untuk effort, bukan hanya hasil akhir (contoh: 'Bagus cara kamu menggunakan strategi itu!' bukan 'Pintar!')",
+      "Variasikan metode setiap 10-15 menit untuk menjaga attention span siswa SD"
+    ],
+
+    indikator_progress: [
+      "Peningkatan akurasi: Siswa mampu menjawab 80%+ soal di level saat ini dengan konsisten dalam 2-4 minggu ke depan",
+      "Kecepatan meningkat: Waktu pengerjaan berkurang 20-30% sambil mempertahankan akurasi, menunjukkan penguasaan konsep yang lebih baik",
+      "Self-correction: Siswa mulai bisa mengenali dan memperbaiki kesalahannya sendiri saat mengerjakan soal, menunjukkan kemampuan metakognitif yang berkembang",
+      "Transfer knowledge: Siswa bisa menerapkan konsep ke konteks atau soal yang berbeda, tidak terpaku pada satu jenis soal saja",
+      "Confidence: Siswa lebih berani bertanya dan mencoba level yang lebih tinggi, menunjukkan growth mindset yang positif"
+    ],
+
+    rekomendasi_video_guru: videos.length > 0 ? videos : []
+  };
+}
+
+/**
+ * Menyimpan hasil analisis guru ke database
+ * @param {string} hasilKuisId - ID hasil kuis
+ * @param {string} materiId - ID materi
+ * @param {string} siswaId - ID siswa
+ * @param {Object} teacherAnalysis - Data hasil analisis untuk guru
+ * @returns {Object} Data analisis yang tersimpan
+ */
+async function saveTeacherAnalysisResult(
+  hasilKuisId,
+  materiId,
+  siswaId,
+  teacherAnalysis
+) {
+  try {
+    // Convert arrays to JSON strings for JSONB fields
+    const aktivitasJson = typeof teacherAnalysis.aktivitas_pembelajaran === 'string'
+      ? teacherAnalysis.aktivitas_pembelajaran
+      : JSON.stringify(teacherAnalysis.aktivitas_pembelajaran);
+
+    const videoJson = typeof teacherAnalysis.rekomendasi_video_guru === 'string'
+      ? teacherAnalysis.rekomendasi_video_guru
+      : JSON.stringify(teacherAnalysis.rekomendasi_video_guru);
+
+    const rekomendasiMetodeJson = typeof teacherAnalysis.rekomendasi_metode_mengajar === 'string'
+      ? teacherAnalysis.rekomendasi_metode_mengajar
+      : JSON.stringify(teacherAnalysis.rekomendasi_metode_mengajar);
+
+    const tipsPraktisJson = typeof teacherAnalysis.tips_praktis === 'string'
+      ? teacherAnalysis.tips_praktis
+      : JSON.stringify(teacherAnalysis.tips_praktis);
+
+    const indikatorProgressJson = typeof teacherAnalysis.indikator_progress === 'string'
+      ? teacherAnalysis.indikator_progress
+      : JSON.stringify(teacherAnalysis.indikator_progress);
+
+    const strategiDifferensiasiJson = typeof teacherAnalysis.strategi_differensiasi === 'string'
+      ? teacherAnalysis.strategi_differensiasi
+      : JSON.stringify(teacherAnalysis.strategi_differensiasi);
+
+    const { data, error } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .insert({
+        hasil_kuis_id: hasilKuisId,
+        materi_id: materiId,
+        siswa_id: siswaId,
+        diagnosis_pembelajaran: teacherAnalysis.diagnosis_pembelajaran,
+        pola_belajar_siswa: teacherAnalysis.pola_belajar_siswa,
+        level_kemampuan_saat_ini: teacherAnalysis.level_kemampuan_saat_ini,
+        zona_proximal_development: teacherAnalysis.zona_proximal_development,
+        rekomendasi_metode_mengajar: rekomendasiMetodeJson,
+        strategi_differensiasi: strategiDifferensiasiJson,
+        aktivitas_pembelajaran: aktivitasJson,
+        tips_praktis: tipsPraktisJson,
+        indikator_progress: indikatorProgressJson,
+        rekomendasi_video_guru: videoJson,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log("✅ Teacher analysis saved to database");
+    return data;
+  } catch (error) {
+    console.error("Error saving teacher analysis result:", error);
+    throw error;
+  }
+}
+
+export {
+  prepareDataForAI,
+  callAIAPI,
+  saveAnalysisResult,
+  callAIAPIForTeacher,
+  saveTeacherAnalysisResult
+};
