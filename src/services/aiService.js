@@ -179,28 +179,65 @@ ${data.waktuAnalisis
   )
   .join("\n")}
 
-DETAIL TIAP SOAL:
+DETAIL LENGKAP SETIAP SOAL YANG DIJAWAB SISWA:
 ${data.detailSoal
   .map(
     (s, i) =>
-      `${i + 1}. Level: ${s.level_soal} | ${
-        s.benar ? "✅ BETUL!" : "❌ Belum tepat"
-      } | Waktu: ${s.waktu_dijawab}/${s.waktu_ditentukan} detik`
+      `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOAL #${i + 1} | Level ${s.level_soal} | ${
+        s.benar ? "✅ BENAR" : "❌ SALAH"
+      }
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 SOAL:
+${s.soal_teks}
+
+💭 JAWABAN SISWA:
+${s.jawaban_siswa}
+
+⏱️ WAKTU PENGERJAAN:
+${s.waktu_dijawab} detik dari ${s.waktu_ditentukan} detik yang disediakan
+${s.waktu_dijawab < s.waktu_ditentukan ? "⚡ Cepat" : "🐢 Menghabiskan waktu"}
+
+${!s.benar ? "⚠️ PERHATIAN: Soal ini dijawab SALAH. Analisis kenapa siswa mungkin salah dan berikan tips perbaikan spesifik untuk soal ini!" : "✅ BAGUS: Soal ini dijawab BENAR. Identifikasi apa yang siswa lakukan dengan benar."}
+`
   )
   .join("\n")}
 
 ---
 
-Buat analisis dengan format JSON. Gunakan bahasa yang ramah, profesional, dan mudah dipahami:
+INSTRUKSI ANALISIS:
+- Perhatikan DETAIL SOAL yang dijawab siswa di atas
+- Untuk soal yang SALAH, coba identifikasi kesalahan konsep atau strategi yang mungkin dilakukan siswa
+- Untuk soal yang BENAR, identifikasi pola keberhasilan siswa
+- Gunakan informasi ini untuk memberikan rekomendasi belajar yang SPESIFIK dan PERSONAL
+- Sebutkan contoh konkret dari soal-soal yang dikerjakan siswa jika relevan
 
-CONTOH YANG BAIK:
+---
+
+Buat analisis dengan format JSON. Gunakan bahasa yang ramah, profesional, dan mudah dipahami.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 CONTOH FORMAT FIELD "KELEMAHAN" YANG BENAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONTOH BAIK (Analisis Detail):
+"kelemahan": "Ada beberapa area yang bisa kamu tingkatkan nih:\\n\\nWAJIB ANALISIS SOAL YANG SALAH:\\nMbah lihat dari detail jawaban kamu, ada beberapa soal yang masih perlu diperbaiki:\\n\\n🔍 Soal #3 (Level 4):\\n   Soal: 'Bu Ani membeli 2 1/4 kg gula. Dia menggunakan 3/4 kg untuk membuat kue...'\\n   Jawaban kamu: 1 kg\\n   Kenapa salah: Sepertinya kamu lupa mengubah pecahan campuran ke pecahan biasa dulu sebelum dikurangi. 2 1/4 harus jadi 9/4, baru dikurangi 3/4.\\n   Solusi: Ingat ya, kalau ada pecahan campuran, ubah dulu ke pecahan biasa: (2 × 4) + 1 = 9, jadi 9/4. Baru dikurangi: 9/4 - 3/4 = 6/4 = 1 1/2 kg.\\n\\n🔍 Soal #7 (Level 5):\\n   Soal: 'Perbandingan tinggi Andi dan Budi adalah 3:4. Jika tinggi Andi 135 cm...'\\n   Jawaban kamu: 160 cm\\n   Kenapa salah: Kamu sudah paham konsep perbandingan, tapi sepertinya salah hitung di langkah akhir. Harusnya 135 ÷ 3 = 45, lalu 45 × 4 = 180 cm.\\n   Solusi: Tips: Selalu cek ulang perhitungan perkalian dan pembagian ya. Kamu sudah benar caranya, cuma kurang teliti di hitung-hitungannya.\\n\\nPola Umum: Mbah lihat kamu sudah paham konsepnya dengan baik, tapi kadang kurang teliti dalam perhitungan. Coba pelan-pelan dan cek ulang setiap langkah ya! 😊"
+
+CONTOH BURUK (Generic, JANGAN DITIRU):
+"kelemahan": "Ada beberapa soal yang masih salah. Kamu perlu latihan lebih banyak di soal level tinggi."  ❌
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONTOH OUTPUT JSON LENGKAP YANG BAIK:
 {
-  "analisis": "Hai! Mbah Adaptivin sudah menganalisis hasil kuis ${data.materiInfo.judul} kamu nih. Dari ${data.kuisInfo.total_soal} soal, kamu berhasil menjawab ${data.hasilStatistik.total_benar} soal dengan benar (${data.hasilStatistik.persentase.toFixed(1)}%). Ini pencapaian yang bagus! Mari kita lihat lebih detail ya 📊",
+  "analisis": "Hai! Mbah Adaptivin sudah menganalisis hasil kuis ${data.materiInfo.judul} kamu nih. Dari ${data.kuisInfo.total_soal} soal, kamu berhasil menjawab ${data.hasilStatistik.total_benar} soal dengan benar (${data.hasilStatistik.persentase.toFixed(1)}%). Ini pencapaian yang bagus! Mbah lihat dari detail jawaban kamu, ada pola menarik yang perlu kita bahas ya 📊",
   "level_tertinggi": "level4",
   "level_terendah": "level4",
-  "kelebihan": "Kamu punya kekuatan di beberapa area nih: (1) Pemahaman dasar ${data.materiInfo.judul} sudah cukup kuat, terbukti dari keberhasilanmu di soal-soal level menengah. (2) Kecepatan mengerjakanmu bagus, menunjukkan kamu cukup familiar dengan materinya. (3) Konsistensi menjawab benar di level tertentu menandakan pemahaman yang solid 🌟",
-  "kelemahan": "Ada beberapa area yang bisa kamu tingkatkan: (1) Soal-soal dengan tingkat kesulitan lebih tinggi masih jadi tantangan. Ini normal kok, karena butuh latihan lebih. (2) Kadang terlihat kamu menjawab terburu-buru, sehingga ada soal yang sebenarnya bisa dijawab malah keliru. Pelan-pelan saja ya, ketelitian itu penting 😊",
-  "rekomendasi_belajar": "Mbah sudah menyiapkan rencana belajar lengkap untukmu! Ikuti langkah-langkah ini ya:\n\n📚 TAHAP 1: PERKUAT FONDASI (Minggu 1-2)\n• Ulangi konsep dasar ${data.materiInfo.judul} yang sudah kamu kuasai dengan cara yang berbeda\n• Buat ringkasan atau mind map sendiri tentang materi ini - menulisnya akan membantu kamu mengingat lebih baik\n• Latihan rutin 15-20 menit setiap hari (lebih efektif dari belajar 2 jam sekali!)\n• Coba jelaskan materi ini ke teman/keluarga - kalau kamu bisa mengajarkan, berarti kamu sudah paham\n\n🎯 TAHAP 2: TINGKATKAN KEMAMPUAN (Minggu 3-4)\n• Mulai coba soal-soal yang levelnya lebih tinggi secara bertahap\n• Teknik membaca soal: Baca 2-3 kali, garis bawahi kata kunci, pahami apa yang ditanya sebelum jawab\n• Kalau salah, JANGAN langsung lanjut! Analisis: Kenapa salah? Bagian mana yang kurang paham? Lalu perbaiki\n• Catat jenis soal yang sering salah, fokus latihan di area itu\n\n💪 TAHAP 3: LATIHAN INTENSIF (Minggu 5-6)\n• Kerjakan soal campuran (mudah-sedang-sulit) untuk bangun stamina mental\n• Set target: misalnya \"hari ini aku mau benar minimal 8 dari 10 soal\"\n• Latihan dengan timer - ini melatih kecepatan sekaligus akurasi\n• Review error: Setiap akhir minggu, lihat lagi soal-soal yang salah dan coba ulang\n\n📖 STRATEGI BELAJAR EFEKTIF:\n• Pomodoro Technique: Belajar fokus 25 menit, istirahat 5 menit, ulangi 4x, lalu istirahat panjang 15-30 menit\n• Belajar di waktu yang sama setiap hari membantu otak membentuk kebiasaan\n• Gunakan berbagai sumber: buku, video (lihat rekomendasi Mbah di bawah), dan latihan online\n\n🤝 JANGAN LUPA:\n• Tanya guru/teman kalau ada yang membingungkan - tidak ada pertanyaan yang bodoh!\n• Bergabung dengan kelompok belajar bisa membuat belajar lebih menyenangkan\n• Istirahat cukup, makan bergizi, dan olahraga ringan - otak butuh tubuh yang sehat untuk belajar optimal\n\n✨ MINDSET JUARA:\n• Setiap kesalahan adalah kesempatan belajar, bukan kegagalan\n• Bandingkan dirimu hari ini dengan dirimu kemarin, bukan dengan orang lain\n• Percaya diri! Kamu pasti bisa menguasai ${data.materiInfo.judul} dengan latihan yang konsisten",
+  "kelebihan": "Kamu punya kekuatan di beberapa area nih: (1) Pemahaman dasar ${data.materiInfo.judul} sudah cukup kuat, terbukti dari keberhasilanmu di soal-soal level menengah. Mbah lihat kamu bisa menjawab dengan tepat ketika soalnya [sebutkan pola/jenis soal spesifik dari data]. (2) Kecepatan mengerjakanmu bagus, menunjukkan kamu cukup familiar dengan materinya. (3) Konsistensi menjawab benar di level tertentu menandakan pemahaman yang solid 🌟",
+  "kelemahan": "[LIHAT CONTOH FORMAT DI ATAS! WAJIB analisis setiap soal yang salah dengan format: nomor soal, kutip isi soal, jawaban siswa, kenapa salah, dan solusi. Jangan skip soal manapun yang salah!]",
+  "rekomendasi_belajar": "Mbah sudah menyiapkan rencana belajar lengkap untukmu berdasarkan analisis detail jawaban kamu! Ikuti langkah-langkah ini ya:\n\n🎯 FOKUS PRIORITAS (PALING PENTING):\n• [Sebutkan konsep SPESIFIK yang perlu diperbaiki berdasarkan soal yang SALAH, contoh: 'Latih lagi cara mengubah pecahan biasa ke pecahan campuran karena Mbah lihat kamu masih kesulitan di soal #3 dan #5']\n• [Berikan tips konkret untuk menghindari kesalahan yang sama, contoh: 'Ingat ya, kalau mau mengubah pecahan biasa jadi campuran, pembilangnya harus lebih besar dari penyebutnya dulu']\n• Ulangi soal-soal yang mirip dengan yang salah tadi sampai kamu paham betul konsepnya\n\n📚 TAHAP 1: PERKUAT FONDASI (Minggu 1-2)\n• Fokus ke konsep [sebutkan konsep yang perlu diperbaiki] - ini yang paling penting untuk kamu saat ini\n• Buat ringkasan atau mind map sendiri tentang materi ini - menulisnya akan membantu kamu mengingat lebih baik\n• Latihan rutin 15-20 menit setiap hari khusus untuk tipe soal yang tadi salah (lebih efektif dari belajar 2 jam sekali!)\n• Coba jelaskan materi ini ke teman/keluarga - kalau kamu bisa mengajarkan, berarti kamu sudah paham\n\n🎯 TAHAP 2: TINGKATKAN KEMAMPUAN (Minggu 3-4)\n• Mulai coba soal-soal yang levelnya lebih tinggi secara bertahap\n• Teknik membaca soal: Baca 2-3 kali, garis bawahi kata kunci, pahami apa yang ditanya sebelum jawab\n• Kalau salah, JANGAN langsung lanjut! Analisis: Kenapa salah? Bagian mana yang kurang paham? Lalu perbaiki\n• Khusus untuk soal [sebutkan jenis soal yang sering salah], coba dengan strategi [berikan strategi spesifik]\n\n💪 TAHAP 3: LATIHAN INTENSIF (Minggu 5-6)\n• Kerjakan soal campuran (mudah-sedang-sulit) untuk bangun stamina mental\n• Set target: misalnya 'hari ini aku mau benar minimal 8 dari 10 soal'\n• Latihan dengan timer - ini melatih kecepatan sekaligus akurasi\n• Review error: Setiap akhir minggu, lihat lagi soal-soal yang salah (terutama soal #[nomor] yang tadi) dan coba ulang\n\n📖 STRATEGI BELAJAR EFEKTIF:\n• Pomodoro Technique: Belajar fokus 25 menit, istirahat 5 menit, ulangi 4x, lalu istirahat panjang 15-30 menit\n• Belajar di waktu yang sama setiap hari membantu otak membentuk kebiasaan\n• Gunakan berbagai sumber: buku, video (lihat rekomendasi Mbah di bawah), dan latihan online\n\n🤝 JANGAN LUPA:\n• Tanya guru/teman kalau ada yang membingungkan - tidak ada pertanyaan yang bodoh!\n• Bergabung dengan kelompok belajar bisa membuat belajar lebih menyenangkan\n• Istirahat cukup, makan bergizi, dan olahraga ringan - otak butuh tubuh yang sehat untuk belajar optimal\n\n✨ MINDSET JUARA:\n• Setiap kesalahan adalah kesempatan belajar, bukan kegagalan\n• Bandingkan dirimu hari ini dengan dirimu kemarin, bukan dengan orang lain\n• Percaya diri! Kamu pasti bisa menguasai ${data.materiInfo.judul} dengan latihan yang konsisten\n\nPENTING: Gunakan detail soal yang sudah Mbah kasih lihat di atas untuk memberikan rekomendasi yang SPESIFIK dan PERSONAL, bukan saran umum!",
   "rekomendasi_video": [
     {"judul": "Video Pembelajaran 1 tentang ${data.materiInfo.judul}", "url": "https://www.youtube.com/watch?v=VIDEO_ID_1"},
     {"judul": "Video Pembelajaran 2 tentang ${data.materiInfo.judul}", "url": "https://www.youtube.com/watch?v=VIDEO_ID_2"},
@@ -218,6 +255,79 @@ Format output harus PERSIS seperti ini:
 "rekomendasi_video": ${JSON.stringify(formattedVideos)}
 
 JANGAN ubah URL atau judul video! Gunakan persis seperti yang Mbah berikan di atas.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ INSTRUKSI PENTING - WAJIB DIBACA ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ANALISIS BERDASARKAN DATA SOAL - WAJIB DETAIL:
+   - Kamu sudah diberikan DETAIL LENGKAP setiap soal yang dijawab siswa di atas
+   - Di bagian "kelemahan", WAJIB analisis SETIAP SOAL yang SALAH satu per satu dengan format:
+     * Nomor soal
+     * Kutip isi soal (minimal 1-2 kalimat pertama)
+     * Jawaban siswa
+     * Analisis kenapa salah (kesalahan konsep, salah hitung, kurang teliti, dll)
+     * Solusi konkret bagaimana menyelesaikan soal ini dengan benar
+   - Jika ada 5 soal salah, analisis SEMUA 5 soal tersebut!
+   - Jangan skip atau generalisasi - HARUS detail untuk setiap soal yang salah
+   - WAJIB memberikan insight tentang KENAPA siswa mungkin salah berdasarkan ISI SOAL dan JAWABAN SISWA
+
+2. REKOMENDASI YANG SPESIFIK:
+   - JANGAN memberikan saran umum seperti "latihan lebih banyak"
+   - HARUS memberikan saran spesifik seperti "latih lagi cara [konsep X] karena di soal #[Y] kamu masih keliru di bagian [Z]"
+   - Sebutkan jenis soal atau pola soal yang perlu difokuskan
+   - Berikan contoh konkret dari soal yang sudah dikerjakan
+
+3. GUNAKAN DATA YANG DIBERIKAN - WAJIB BACA SEMUA DETAIL:
+   - Manfaatkan teks soal, jawaban siswa, dan waktu pengerjaan yang SUDAH DIBERIKAN DI ATAS
+   - Untuk SETIAP soal yang SALAH:
+     a) Baca isi soalnya (sudah diberikan lengkap di bagian "DETAIL LENGKAP SETIAP SOAL")
+     b) Lihat jawaban siswa
+     c) Analisis kenapa jawaban siswa salah (bandingkan dengan isi soal)
+     d) Berikan solusi spesifik bagaimana menyelesaikan soal tersebut
+   - Jika siswa menjawab cepat tapi salah → mungkin kurang teliti atau terburu-buru
+   - Jika siswa menghabiskan banyak waktu tapi tetap salah → mungkin belum paham konsep
+   - Identifikasi pola dari beberapa soal yang salah (apakah salah di konsep yang sama?)
+
+   CONTOH ANALISIS YANG BENAR:
+   "Di soal #3 tentang pengurangan pecahan campuran '2 1/4 - 3/4', kamu jawab 1 kg, padahal seharusnya 1 1/2 kg. Kamu lupa mengubah pecahan campuran ke pecahan biasa dulu..."
+
+   CONTOH ANALISIS YANG SALAH (JANGAN DITIRU):
+   "Kamu masih kesulitan di soal level tinggi." ❌ (terlalu umum, tidak spesifik)
+
+4. TONE YANG RAMAH TAPI DETAIL:
+   - Tetap gunakan bahasa Mbah Adaptivin yang hangat
+   - Tapi tambahkan detail spesifik dari analisis soal
+   - Berikan pujian untuk soal yang benar + identifikasi kenapa bisa benar
+   - Berikan motivasi untuk soal yang salah + tips konkret untuk perbaikan
+
+INGAT: Tujuan analisis ini adalah memberikan INSIGHT MENDALAM yang ACTIONABLE untuk siswa, bukan sekadar ringkasan hasil kuis!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 FORMAT OUTPUT JSON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PENTING - Aturan Format JSON:
+1. Output HARUS berupa VALID JSON (tidak boleh ada syntax error)
+2. Untuk newline dalam string, gunakan \\n (double backslash n)
+3. JANGAN PERNAH gunakan double quotes (") di dalam string value - HANYA gunakan single quotes (')
+4. Jangan gunakan karakter kontrol yang tidak valid dalam JSON
+5. Pastikan semua string ditutup dengan benar
+6. Jangan gunakan trailing comma
+7. Test JSON-mu secara mental sebelum output
+
+Contoh STRING yang BENAR dalam JSON:
+✅ "text": "Ini baris pertama.\\n\\nIni baris kedua dengan 'single quotes' untuk penekanan."
+✅ "text": "Gunakan 'petik satu' untuk kata khusus, JANGAN 'petik dua'."
+
+Contoh STRING yang SALAH (JANGAN LAKUKAN INI):
+❌ "text": "Ini dengan "petik dua" yang BREAK JSON"  // SALAH! Gunakan 'petik satu'
+❌ "text": "Baris baru
+tanpa \\n"  // SALAH! Harus pakai \\n
+
+INGAT: Dalam string JSON, hanya gunakan SINGLE QUOTES (') untuk emphasize, JANGAN double quotes (")!
+
+Output JSON kamu HARUS bisa di-parse tanpa error!
 `.trim();
 
     console.log("🤖 Calling Gemini AI for analysis...");
@@ -229,31 +339,63 @@ JANGAN ubah URL atau judul video! Gunakan persis seperti yang Mbah berikan di at
 
     console.log("📝 Gemini AI Response:", text);
 
-    // Parse JSON response
-    let analysisData;
-    try {
-      // Clean response jika ada markdown code blocks dan control characters
-      const cleanedText = text
+    // Helper function to sanitize JSON string
+    const sanitizeJsonString = (jsonStr) => {
+      // Remove markdown code blocks
+      let cleaned = jsonStr
         .replace(/```json\n?/g, "")
         .replace(/```\n?/g, "")
         .trim();
 
-      // Sanitize: Parse sebagai JSON object, lalu stringify ulang untuk fix control characters
-      // Ini akan otomatis escape newline dan special characters
-      const tempParsed = JSON.parse(cleanedText);
+      // Fix common JSON issues:
+      // 1. Replace literal newlines in string values with \\n
+      // 2. Replace tab characters with \\t
+      // 3. Remove any trailing commas before } or ]
 
-      // Fix rekomendasi_belajar yang mungkin punya newline tidak valid
-      if (tempParsed.rekomendasi_belajar) {
-        tempParsed.rekomendasi_belajar = tempParsed.rekomendasi_belajar
-          .replace(/\r\n/g, '\\n')
-          .replace(/\n/g, '\\n')
-          .replace(/\r/g, '\\n');
+      // This is a simple heuristic - for production, consider using a JSON repair library
+      cleaned = cleaned
+        .replace(/,(\s*[}\]])/g, '$1')  // Remove trailing commas
+        .replace(/\r\n/g, '\\n')         // Windows newlines
+        .replace(/\r/g, '\\n')           // Mac newlines
+        .replace(/\t/g, '\\t');          // Tabs
+
+      return cleaned;
+    };
+
+    // Parse JSON response with better error handling
+    let analysisData;
+    try {
+      // Step 1: Sanitize JSON string
+      const cleanedText = sanitizeJsonString(text);
+
+      // Step 2: Try parsing
+      let tempParsed;
+      try {
+        tempParsed = JSON.parse(cleanedText);
+      } catch (firstError) {
+        console.log("⚠️ First parse attempt failed, trying manual repair...");
+        console.log("Error:", firstError.message);
+
+        // Try to identify and fix the specific error location
+        // Extract position from error message
+        const posMatch = firstError.message.match(/position (\d+)/);
+        if (posMatch) {
+          const errorPos = parseInt(posMatch[1]);
+          const contextStart = Math.max(0, errorPos - 50);
+          const contextEnd = Math.min(cleanedText.length, errorPos + 50);
+          console.log("Error context:", cleanedText.substring(contextStart, contextEnd));
+        }
+
+        // Last resort: try to extract data manually
+        throw firstError;
       }
 
       analysisData = tempParsed;
     } catch (parseError) {
       console.error("❌ Error parsing AI response:", parseError);
-      console.log("Raw response:", text);
+      console.log("Raw response length:", text.length);
+      console.log("First 500 chars:", text.substring(0, 500));
+      console.log("Last 500 chars:", text.substring(text.length - 500));
 
       // Fallback: extract data dengan regex jika JSON parsing gagal
       analysisData = extractDataFromText(text, data);
