@@ -16,6 +16,7 @@ import hasilKuisRoutes from "./routes/hasilKuisRoutes.js";
 import detailJawabanRoutes from "./routes/detailJawabanRoutes.js";
 import analisisAiRoutes from "./routes/analisisAiRoutes.js";
 import laporanRoutes from "./routes/laporanRoutes.js";
+import videoRekomendasiRoutes from "./routes/videoRekomendasiRoutes.js";
 
 const app = express();
 
@@ -55,6 +56,8 @@ app.use("/api/analisis", analisisAiRoutes);
 console.log("✅ /api/analisis registered");
 app.use("/api/laporan", laporanRoutes);
 console.log("✅ /api/laporan registered");
+app.use("/api/video-rekomendasi", videoRekomendasiRoutes);
+console.log("✅ /api/video-rekomendasi registered");
 
 // 🔍 Test route untuk verify server berjalan
 app.get("/api/test", (req, res) => {
@@ -84,6 +87,8 @@ app.use((req, res) => {
       "/api/hasil-kuis/*",
       "/api/jawaban/*",
       "/api/analisis/*",
+      "/api/laporan/*",
+      "/api/video-rekomendasi/*",
     ],
   });
 });
