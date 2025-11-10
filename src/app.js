@@ -41,9 +41,13 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  process.env.FRONTEND_URL, // Frontend production URL
-  process.env.ADMIN_URL, // Admin production URL
+  "https://adaptivin-user.vercel.app", // Frontend production (hardcoded fallback)
+  "https://adaptivin-admin.vercel.app", // Admin production (hardcoded fallback)
+  process.env.FRONTEND_URL, // Frontend production URL from env
+  process.env.ADMIN_URL, // Admin production URL from env
 ].filter(Boolean); // Remove undefined values
+
+console.log("🌐 CORS Allowed Origins:", allowedOrigins);
 
 app.use(
   cors({
@@ -52,9 +56,11 @@ app.use(
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
+        console.log(`✅ CORS allowed for origin: ${origin}`);
         callback(null, true);
       } else {
         console.warn(`⚠️ CORS blocked origin: ${origin}`);
+        console.warn(`📋 Allowed origins:`, allowedOrigins);
         callback(new Error("Not allowed by CORS"));
       }
     },
