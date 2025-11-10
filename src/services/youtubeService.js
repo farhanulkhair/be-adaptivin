@@ -41,6 +41,7 @@ export async function searchYouTubeVideos(query, maxResults = 3) {
         safeSearch: "strict", // Filter konten aman untuk anak
         order: "relevance", // Urutkan berdasarkan relevansi
       },
+      timeout: 10000, // 10 second timeout
     });
 
     if (!response.data.items || response.data.items.length === 0) {
@@ -50,7 +51,7 @@ export async function searchYouTubeVideos(query, maxResults = 3) {
 
     const videos = response.data.items.map((item) => ({
       judul: item.snippet.title,
-      url: `https://www.youtube.com/watch?v=${item.videoId}`,
+      url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
       thumbnail: item.snippet.thumbnails.medium.url,
       channel: item.snippet.channelTitle,
       publishedAt: item.snippet.publishedAt,
@@ -59,22 +60,51 @@ export async function searchYouTubeVideos(query, maxResults = 3) {
     console.log(`✅ Found ${videos.length} videos`);
     return videos;
   } catch (error) {
-    console.error("❌ Error searching YouTube:", error.message);
+    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+      console.error("❌ Network error searching YouTube:", error.message);
+      console.log("💡 Tip: Check your internet connection or proxy settings");
+    } else if (error.response?.status === 403) {
+      console.error("❌ YouTube API quota exceeded or invalid key");
+    } else {
+      console.error("❌ Error searching YouTube:", error.message);
+    }
     return getFallbackVideos(query);
   }
 }
 
 /**
+ * Normalize materi name - extract core topic from potentially long title
+ * Example: "belajar Pecahan SD kelas 4" -> "Pecahan"
+ */
+function normalizeMateriName(materi) {
+  if (!materi) return materi;
+
+  // Remove common prefixes
+  let normalized = materi
+    .replace(/^(belajar|tutorial|materi|pengenalan|pembelajaran)\s+/i, '')
+    .replace(/\s+(untuk\s+)?(anak\s+)?SD(\s+kelas\s+\d+)?$/i, '')
+    .replace(/\s+matematika$/i, '')
+    .trim();
+
+  // If normalized is empty, return original
+  return normalized || materi;
+}
+
+/**
  * Mencari video untuk materi tertentu dengan berbagai variasi query
- * @param {string} materi - Nama materi (misal: "Pecahan")
+ * @param {string} materi - Nama materi (misal: "Pecahan" atau "belajar Pecahan SD kelas 4")
  * @returns {Promise<Array>} Array of 3 best videos
  */
 export async function searchEducationalVideos(materi) {
   try {
+    // Normalize materi name untuk avoid duplikasi
+    const coreMateri = normalizeMateriName(materi);
+    console.log(`📚 Original materi: "${materi}" -> Normalized: "${coreMateri}"`);
+
     // FEATURE: Gunakan GCP cache dengan ranking berdasarkan views + likes
     if (USE_GCP_CACHE) {
       console.log("🚀 Using GCP Firestore cache with smart ranking...");
-      const videos = await getVideoRecommendations(materi, 3);
+      const videos = await getVideoRecommendations(coreMateri, 3);
 
       // Format untuk compatibility dengan existing code
       return videos.map(video => ({
@@ -93,9 +123,9 @@ export async function searchEducationalVideos(materi) {
 
     // Coba beberapa query untuk hasil terbaik
     const queries = [
-      `belajar ${materi} SD kelas 4`,
-      `tutorial ${materi} untuk anak SD`,
-      `${materi} matematika SD mudah dipahami`,
+      `${coreMateri} SD kelas 4`,
+      `belajar ${coreMateri} untuk anak SD`,
+      `tutorial ${coreMateri} matematika SD`,
     ];
 
     // Cari dengan query pertama dulu
@@ -117,50 +147,35 @@ export async function searchEducationalVideos(materi) {
 
 /**
  * Fallback videos kalau API gagal
- * Menggunakan channel edukatif populer Indonesia
+ * Menggunakan direct YouTube search URLs
  */
 function getFallbackVideos(materi) {
-  console.log("⚠️ Using fallback videos");
+  console.log("⚠️ Using fallback videos (YouTube search URLs)");
 
-  // Video populer dari channel edukatif Indonesia
-  const fallbackChannels = {
-    Pecahan: [
-      {
-        judul: "Belajar Pecahan - Matematika SD Kelas 4",
-        url: "https://www.youtube.com/watch?v=kFXlM8bHXIA",
-        channel: "Channel Edukasi",
-      },
-      {
-        judul: "Cara Mudah Memahami Pecahan",
-        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        channel: "Belajar Matematika",
-      },
-      {
-        judul: "Pecahan Sederhana untuk Anak SD",
-        url: "https://www.youtube.com/watch?v=9bZkp7q19f0",
-        channel: "Ruang Guru",
-      },
-    ],
-    default: [
-      {
-        judul: `Belajar ${materi} - Matematika SD`,
-        url: "https://www.youtube.com/results?search_query=" + encodeURIComponent(`belajar ${materi} SD`),
-        channel: "YouTube Search",
-      },
-      {
-        judul: `Tutorial ${materi} Mudah Dipahami`,
-        url: "https://www.youtube.com/results?search_query=" + encodeURIComponent(`tutorial ${materi} SD`),
-        channel: "YouTube Search",
-      },
-      {
-        judul: `${materi} untuk Anak SD`,
-        url: "https://www.youtube.com/results?search_query=" + encodeURIComponent(`${materi} anak SD`),
-        channel: "YouTube Search",
-      },
-    ],
-  };
+  // Normalize materi untuk avoid duplikasi
+  const coreMateri = normalizeMateriName(materi);
 
-  return fallbackChannels[materi] || fallbackChannels.default;
+  // Generate direct YouTube search links
+  return [
+    {
+      judul: `Belajar ${coreMateri} - SD Kelas 4`,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`belajar ${coreMateri} SD kelas 4`)}`,
+      channel: "YouTube Search",
+      thumbnail: "https://via.placeholder.com/320x180?text=Video+1",
+    },
+    {
+      judul: `Tutorial ${coreMateri} Mudah Dipahami`,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`tutorial ${coreMateri} SD mudah`)}`,
+      channel: "YouTube Search",
+      thumbnail: "https://via.placeholder.com/320x180?text=Video+2",
+    },
+    {
+      judul: `${coreMateri} untuk Anak SD`,
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${coreMateri} anak SD`)}`,
+      channel: "YouTube Search",
+      thumbnail: "https://via.placeholder.com/320x180?text=Video+3",
+    },
+  ];
 }
 
 /**
