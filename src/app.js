@@ -16,6 +16,7 @@ import hasilKuisRoutes from "./routes/hasilKuisRoutes.js";
 import detailJawabanRoutes from "./routes/detailJawabanRoutes.js";
 import laporanRoutes from "./routes/laporanRoutes.js";
 import videoRekomendasiRoutes from "./routes/videoRekomendasiRoutes.js";
+import analisisAiRoutes from "./routes/analisisAiRoutes.js";
 
 const app = express();
 
