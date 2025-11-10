@@ -92,9 +92,10 @@ export const getLaporanSiswa = async (req, res) => {
       const { data: analisis, error: analisisError } = await supabaseAdmin
         .from("analisis_ai")
         .select(
-          "id, hasil_kuis_id, materi_id, analisis, kelebihan, kelemahan, level_tertinggi, level_terendah, rekomendasi_belajar, rekomendasi_video"
+          "id, hasil_kuis_id, materi_id, analisis, kelebihan, kelemahan, level_tertinggi, level_terendah, rekomendasi_belajar, rekomendasi_video, created_at"
         )
-        .in("hasil_kuis_id", hasilKuisIds);
+        .in("hasil_kuis_id", hasilKuisIds)
+        .order("created_at", { ascending: false });
 
       if (analisisError) {
         console.error("Error fetching analisis:", analisisError);
@@ -357,18 +358,19 @@ export const getHasilKuisDetail = async (req, res) => {
     }
 
     // Get jawaban_soal separately for each soal
-    const soalIds = [...new Set(detailJawaban.map(j => j.soal_id))];
+    const soalIds = [...new Set(detailJawaban.map((j) => j.soal_id))];
     let jawabanSoalMap = {};
-    
+
     if (soalIds.length > 0) {
-      const { data: jawabanSoalList, error: jawabanSoalError } = await supabaseAdmin
-        .from("jawaban_soal")
-        .select("id, soal_id, teks_jawaban, is_benar")
-        .in("soal_id", soalIds);
-        
+      const { data: jawabanSoalList, error: jawabanSoalError } =
+        await supabaseAdmin
+          .from("jawaban_soal")
+          .select("id, soal_id, teks_jawaban, is_benar")
+          .in("soal_id", soalIds);
+
       if (!jawabanSoalError && jawabanSoalList) {
         // Group by soal_id
-        jawabanSoalList.forEach(js => {
+        jawabanSoalList.forEach((js) => {
           if (!jawabanSoalMap[js.soal_id]) {
             jawabanSoalMap[js.soal_id] = [];
           }
@@ -393,18 +395,22 @@ export const getHasilKuisDetail = async (req, res) => {
         detailJawaban: jawabanHasil.map((j) => {
           // Get correct answer(s) based on question type
           let jawabanBenar = "-";
-          
+
           // Get jawaban_soal for this question
           const jawabanSoalList = jawabanSoalMap[j.soal_id] || [];
-          
+
           if (jawabanSoalList.length > 0) {
-            const correctAnswers = jawabanSoalList.filter(ans => ans.is_benar);
-            
+            const correctAnswers = jawabanSoalList.filter(
+              (ans) => ans.is_benar
+            );
+
             if (correctAnswers.length > 0) {
               // For multiple correct answers (pilihan_ganda_kompleks)
               if (j.bank_soal?.tipe_jawaban === "pilihan_ganda_kompleks") {
-                jawabanBenar = correctAnswers.map(ans => ans.teks_jawaban).join(", ");
-              } 
+                jawabanBenar = correctAnswers
+                  .map((ans) => ans.teks_jawaban)
+                  .join(", ");
+              }
               // For single correct answer (pilihan_ganda, benar_salah)
               else {
                 jawabanBenar = correctAnswers[0].teks_jawaban;
@@ -412,7 +418,10 @@ export const getHasilKuisDetail = async (req, res) => {
             }
           }
           // For essay/isian, use student's answer if correct
-          else if (j.bank_soal?.tipe_jawaban === "isian" || j.bank_soal?.tipe_jawaban === "essay") {
+          else if (
+            j.bank_soal?.tipe_jawaban === "isian" ||
+            j.bank_soal?.tipe_jawaban === "essay"
+          ) {
             jawabanBenar = j.benar ? j.jawaban_siswa : "-";
           }
 
