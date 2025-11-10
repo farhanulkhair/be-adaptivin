@@ -216,11 +216,7 @@ export const getSoalById = async (req, res) => {
       throw error;
     }
 
-    return successResponse(
-      res,
-      { data },
-      "Berhasil mengambil data soal"
-    );
+    return successResponse(res, { data }, "Berhasil mengambil data soal");
   } catch (error) {
     console.error("Error getting soal by ID:", error);
     return errorResponse(
@@ -263,18 +259,10 @@ export const getSoalCountByMateri = async (req, res) => {
       }
     });
 
-    return successResponse(
-      res,
-      { data: counts },
-      "Berhasil menghitung soal"
-    );
+    return successResponse(res, { data: counts }, "Berhasil menghitung soal");
   } catch (error) {
     console.error("Error counting soal:", error);
-    return errorResponse(
-      res,
-      `Gagal menghitung soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal menghitung soal: ${error.message}`, 500);
   }
 };
 
@@ -424,7 +412,8 @@ export const createSoal = async (req, res) => {
     }
 
     // Convert durasi dari menit ke detik
-    const durasiDetik = parseInt(durasi_soal) * 60;
+    // ⭐ Use parseFloat to handle decimal minutes (e.g., 1.25 menit = 75 detik)
+    const durasiDetik = Math.round(parseFloat(durasi_soal) * 60);
 
     // Insert soal
     const { data: soalData, error: soalError } = await supabaseAdmin
@@ -477,11 +466,7 @@ export const createSoal = async (req, res) => {
     );
   } catch (error) {
     console.error("Error creating soal:", error);
-    return errorResponse(
-      res,
-      `Gagal membuat soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal membuat soal: ${error.message}`, 500);
   }
 };
 
@@ -559,7 +544,9 @@ export const updateSoal = async (req, res) => {
     }
     if (soal_teks) updateData.soal_teks = soal_teks;
     if (penjelasan !== undefined) updateData.penjelasan = penjelasan;
-    if (durasi_soal) updateData.durasi_soal = parseInt(durasi_soal) * 60;
+    // ⭐ Use parseFloat to handle decimal minutes (e.g., 1.25 menit = 75 detik)
+    if (durasi_soal)
+      updateData.durasi_soal = Math.round(parseFloat(durasi_soal) * 60);
 
     // Handle image updates
     if (req.files?.soal_gambar?.[0]) {
@@ -687,11 +674,7 @@ export const updateSoal = async (req, res) => {
     );
   } catch (error) {
     console.error("Error updating soal:", error);
-    return errorResponse(
-      res,
-      `Gagal update soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal update soal: ${error.message}`, 500);
   }
 };
 
@@ -733,11 +716,7 @@ export const deleteSoal = async (req, res) => {
     return successResponse(res, null, "Berhasil menghapus soal");
   } catch (error) {
     console.error("Error deleting soal:", error);
-    return errorResponse(
-      res,
-      `Gagal menghapus soal: ${error.message}`,
-      500
-    );
+    return errorResponse(res, `Gagal menghapus soal: ${error.message}`, 500);
   }
 };
 
