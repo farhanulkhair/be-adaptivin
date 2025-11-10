@@ -5,8 +5,12 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "seed-superadmin": "node src/seed/seedSuperAdmin.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "seed-guru": "node src/seed/seedTestGuru.js",
+    "test": "node src/test/test-all-endpoints.js",
+    "test:cleanup": "node src/test/test-all-endpoints.js --cleanup",
+    "vercel-build": "echo 'Build complete'"
   },
   "keywords": [],
   "author": "",
