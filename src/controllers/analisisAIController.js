@@ -4,6 +4,8 @@ import {
   prepareDataForAI,
   callAIAPI,
   saveAnalysisResult,
+  callAIAPIForTeacher,
+  saveTeacherAnalysisResult,
 } from "../services/aiService.js";
 
 /**
@@ -212,8 +214,7 @@ export const getAnalisisByMateri = async (req, res) => {
           ),
           siswa:pengguna!hasil_kuis_siswa_siswa_id_fkey(
             id,
-            nama_lengkap,
-            email
+            nama_lengkap
           )
         ),
         materi:materi!analisis_ai_materi_id_fkey(
@@ -276,8 +277,7 @@ export const getAllAnalisis = async (req, res) => {
           ),
           siswa:pengguna!hasil_kuis_siswa_siswa_id_fkey(
             id,
-            nama_lengkap,
-            email
+            nama_lengkap
           )
         ),
         materi:materi!analisis_ai_materi_id_fkey(
@@ -362,6 +362,404 @@ export const deleteAnalisis = async (req, res) => {
     return successResponse(res, null, "Analisis berhasil dihapus");
   } catch (error) {
     console.error("Error in deleteAnalisis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * ========================================
+ * ANALISIS UNTUK GURU
+ * ========================================
+ */
+
+/**
+ * Membuat analisis strategi pembelajaran untuk GURU
+ * POST /api/analisis/guru/:hasilKuisId
+ */
+export const createTeacherAnalysis = async (req, res) => {
+  try {
+    const { hasilKuisId } = req.params;
+
+    // Cek apakah hasil kuis exists dan sudah selesai
+    const { data: hasilKuis, error: hasilError } = await supabaseAdmin
+      .from("hasil_kuis_siswa")
+      .select(
+        `
+        *,
+        kuis:kuis!hasil_kuis_siswa_kuis_id_fkey(
+          materi_id
+        )
+      `
+      )
+      .eq("id", hasilKuisId)
+      .single();
+
+    if (hasilError || !hasilKuis) {
+      return errorResponse(res, "Hasil kuis tidak ditemukan", 404);
+    }
+
+    if (!hasilKuis.selesai) {
+      return errorResponse(
+        res,
+        "Kuis belum selesai, tidak bisa dianalisis",
+        400
+      );
+    }
+
+    // Cek apakah sudah ada analisis guru sebelumnya
+    const { data: existingAnalisis } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .select("id")
+      .eq("hasil_kuis_id", hasilKuisId)
+      .maybeSingle();
+
+    if (existingAnalisis) {
+      return errorResponse(
+        res,
+        "Hasil kuis ini sudah pernah dianalisis untuk guru",
+        400
+      );
+    }
+
+    console.log("🎓 Memulai analisis strategi pembelajaran untuk guru...");
+
+    // 1. Siapkan data untuk AI
+    const dataForAI = await prepareDataForAI(hasilKuisId);
+
+    // 2. Panggil AI API untuk analisis guru
+    const teacherAnalysis = await callAIAPIForTeacher(dataForAI);
+
+    // 3. Simpan hasil analisis guru ke database
+    const savedAnalysis = await saveTeacherAnalysisResult(
+      hasilKuisId,
+      hasilKuis.kuis.materi_id,
+      hasilKuis.siswa_id,
+      teacherAnalysis
+    );
+
+    console.log("✅ Analisis strategi guru berhasil disimpan!");
+
+    return successResponse(
+      res,
+      savedAnalysis,
+      "Analisis strategi pembelajaran untuk guru berhasil dibuat",
+      201
+    );
+  } catch (error) {
+    console.error("Error in createTeacherAnalysis:", error);
+    return errorResponse(res, error.message || "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Mendapatkan analisis guru berdasarkan hasil kuis
+ * GET /api/analisis/guru/:hasilKuisId
+ */
+export const getTeacherAnalysisByHasilKuis = async (req, res) => {
+  try {
+    const { hasilKuisId } = req.params;
+
+    console.log("🔍 getTeacherAnalysisByHasilKuis called with hasilKuisId:", hasilKuisId);
+
+    const { data: analisis, error } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .select(
+        `
+        *,
+        hasil_kuis:hasil_kuis_siswa!analisis_ai_guru_hasil_kuis_id_fkey(
+          id,
+          total_benar,
+          total_salah,
+          total_waktu,
+          kuis:kuis!hasil_kuis_siswa_kuis_id_fkey(
+            id,
+            judul
+          ),
+          siswa:pengguna!hasil_kuis_siswa_siswa_id_fkey(
+            id,
+            nama_lengkap
+          )
+        ),
+        materi:materi!analisis_ai_guru_materi_id_fkey(
+          id,
+          judul_materi,
+          deskripsi
+        )
+      `
+      )
+      .eq("hasil_kuis_id", hasilKuisId)
+      .single();
+
+    console.log("📊 Query result - error:", error, "analisis:", analisis ? "FOUND" : "NOT FOUND");
+
+    if (error || !analisis) {
+      console.error("❌ Analisis guru tidak ditemukan untuk hasilKuisId:", hasilKuisId);
+      return errorResponse(res, "Analisis guru tidak ditemukan", 404);
+    }
+
+    // Parse JSON fields
+    if (analisis.aktivitas_pembelajaran) {
+      try {
+        analisis.aktivitas_pembelajaran = JSON.parse(
+          analisis.aktivitas_pembelajaran
+        );
+      } catch (e) {
+        console.error("Error parsing aktivitas_pembelajaran:", e);
+      }
+    }
+
+    if (analisis.rekomendasi_video_guru) {
+      try {
+        analisis.rekomendasi_video_guru = JSON.parse(
+          analisis.rekomendasi_video_guru
+        );
+      } catch (e) {
+        console.error("Error parsing rekomendasi_video_guru:", e);
+      }
+    }
+
+    return successResponse(res, analisis, "Analisis guru berhasil diambil");
+  } catch (error) {
+    console.error("Error in getTeacherAnalysisByHasilKuis:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Mendapatkan semua analisis guru berdasarkan materi
+ * GET /api/analisis/guru/materi/:materiId
+ */
+export const getTeacherAnalysisByMateri = async (req, res) => {
+  try {
+    const { materiId } = req.params;
+
+    const { data: analisisList, error } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .select(
+        `
+        *,
+        hasil_kuis:hasil_kuis_siswa!analisis_ai_guru_hasil_kuis_id_fkey(
+          id,
+          total_benar,
+          total_salah,
+          total_waktu,
+          kuis:kuis!hasil_kuis_siswa_kuis_id_fkey(
+            id,
+            judul
+          ),
+          siswa:pengguna!hasil_kuis_siswa_siswa_id_fkey(
+            id,
+            nama_lengkap
+          )
+        ),
+        materi:materi!analisis_ai_guru_materi_id_fkey(
+          id,
+          judul_materi
+        )
+      `
+      )
+      .eq("materi_id", materiId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching teacher analysis by materi:", error);
+      return errorResponse(res, "Gagal mengambil analisis guru", 500);
+    }
+
+    // Parse JSON fields untuk setiap analisis
+    const parsedAnalisis = analisisList.map((analisis) => {
+      if (analisis.aktivitas_pembelajaran) {
+        try {
+          analisis.aktivitas_pembelajaran = JSON.parse(
+            analisis.aktivitas_pembelajaran
+          );
+        } catch (e) {
+          console.error("Error parsing aktivitas_pembelajaran:", e);
+        }
+      }
+
+      if (analisis.rekomendasi_video_guru) {
+        try {
+          analisis.rekomendasi_video_guru = JSON.parse(
+            analisis.rekomendasi_video_guru
+          );
+        } catch (e) {
+          console.error("Error parsing rekomendasi_video_guru:", e);
+        }
+      }
+
+      return analisis;
+    });
+
+    return successResponse(
+      res,
+      parsedAnalisis,
+      "Analisis guru berhasil diambil"
+    );
+  } catch (error) {
+    console.error("Error in getTeacherAnalysisByMateri:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Mendapatkan analisis guru berdasarkan siswa
+ * GET /api/analisis/guru/siswa/:siswaId
+ */
+export const getTeacherAnalysisBySiswa = async (req, res) => {
+  try {
+    const { siswaId } = req.params;
+
+    const { data: analisisList, error } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .select(
+        `
+        *,
+        hasil_kuis:hasil_kuis_siswa!analisis_ai_guru_hasil_kuis_id_fkey(
+          id,
+          total_benar,
+          total_salah,
+          total_waktu,
+          kuis:kuis!hasil_kuis_siswa_kuis_id_fkey(
+            id,
+            judul
+          )
+        ),
+        materi:materi!analisis_ai_guru_materi_id_fkey(
+          id,
+          judul_materi
+        ),
+        siswa:pengguna!analisis_ai_guru_siswa_id_fkey(
+          id,
+          nama_lengkap
+        )
+      `
+      )
+      .eq("siswa_id", siswaId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching teacher analysis by siswa:", error);
+      return errorResponse(res, "Gagal mengambil analisis guru", 500);
+    }
+
+    // Parse JSON fields
+    const parsedAnalisis = analisisList.map((analisis) => {
+      if (analisis.aktivitas_pembelajaran) {
+        try {
+          analisis.aktivitas_pembelajaran = JSON.parse(
+            analisis.aktivitas_pembelajaran
+          );
+        } catch (e) {
+          console.error("Error parsing aktivitas_pembelajaran:", e);
+        }
+      }
+
+      if (analisis.rekomendasi_video_guru) {
+        try {
+          analisis.rekomendasi_video_guru = JSON.parse(
+            analisis.rekomendasi_video_guru
+          );
+        } catch (e) {
+          console.error("Error parsing rekomendasi_video_guru:", e);
+        }
+      }
+
+      return analisis;
+    });
+
+    return successResponse(
+      res,
+      parsedAnalisis,
+      "Analisis guru berhasil diambil"
+    );
+  } catch (error) {
+    console.error("Error in getTeacherAnalysisBySiswa:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Cek status analisis guru
+ * GET /api/analisis/guru/check/:hasilKuisId
+ */
+export const checkTeacherAnalysisStatus = async (req, res) => {
+  try {
+    const { hasilKuisId } = req.params;
+
+    // Cek hasil kuis
+    const { data: hasilKuis, error: hasilError } = await supabaseAdmin
+      .from("hasil_kuis_siswa")
+      .select("id, selesai")
+      .eq("id", hasilKuisId)
+      .single();
+
+    if (hasilError || !hasilKuis) {
+      return errorResponse(res, "Hasil kuis tidak ditemukan", 404);
+    }
+
+    // Cek apakah ada analisis guru
+    const { data: analisis, error: analisisError } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .select("id, created_at")
+      .eq("hasil_kuis_id", hasilKuisId)
+      .maybeSingle();
+
+    if (analisisError) {
+      console.error("Error checking teacher analysis:", analisisError);
+    }
+
+    const hasAnalysis = analisis !== null;
+
+    return successResponse(
+      res,
+      {
+        hasil_kuis_id: hasilKuisId,
+        is_analyzed: hasAnalysis,
+        analisis_id: hasAnalysis ? analisis.id : null,
+        is_completed: hasilKuis.selesai,
+      },
+      "Status analisis guru berhasil dicek"
+    );
+  } catch (error) {
+    console.error("Error in checkTeacherAnalysisStatus:", error);
+    return errorResponse(res, "Terjadi kesalahan server", 500);
+  }
+};
+
+/**
+ * Delete analisis guru
+ * DELETE /api/analisis/guru/:id
+ */
+export const deleteTeacherAnalysis = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Cek apakah analisis exists
+    const { data: existingAnalisis, error: checkError } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (checkError || !existingAnalisis) {
+      return errorResponse(res, "Analisis guru tidak ditemukan", 404);
+    }
+
+    // Delete analisis
+    const { error: deleteError } = await supabaseAdmin
+      .from("analisis_ai_guru")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      console.error("Error deleting teacher analysis:", deleteError);
+      return errorResponse(res, "Gagal menghapus analisis guru", 500);
+    }
+
+    return successResponse(res, null, "Analisis guru berhasil dihapus");
+  } catch (error) {
+    console.error("Error in deleteTeacherAnalysis:", error);
     return errorResponse(res, "Terjadi kesalahan server", 500);
   }
 };
