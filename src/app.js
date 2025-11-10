@@ -20,11 +20,29 @@ import analisisAiRoutes from "./routes/analisisAiRoutes.js";
 
 const app = express();
 
+// CORS configuration with environment variable support
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  process.env.FRONTEND_URL, // Frontend production URL
+  process.env.ADMIN_URL, // Admin production URL
+].filter(Boolean); // Remove undefined values
+
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3001"],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️ CORS blocked origin: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
-    optionsSuccessStatus: 200, // penting untuk browser lama
+    optionsSuccessStatus: 200,
   })
 );
 

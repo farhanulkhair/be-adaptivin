@@ -46,9 +46,9 @@ let testData = {
   },
   users: {
     superadmin: { email: "superadmin@gmail.com", password: "Superadmin123!" },
-    admin: { email: "admin.test@test.com", password: "Admin123!" },
-    guru: { email: "guru.test@test.com", password: "Guru123!" },
-    siswa: { email: "siswa.test@test.com", password: "Siswa123!" },
+    admin: { email: "admin@gmail.com", password: "admin1234" },
+    guru: { email: "guru@gmail.com", password: "guru1234" },
+    siswa: { email: "siswa@gmail.com", password: "siswa1234" },
   },
 };
 
