@@ -4,6 +4,23 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Check environment variables before proceeding
+import { checkRequiredEnvVars } from "./utils/checkEnv.js";
+try {
+  checkRequiredEnvVars();
+} catch (error) {
+  console.error("❌ Environment check failed:", error.message);
+  // On Vercel, this will show in logs
+  if (process.env.VERCEL) {
+    console.error("\n📌 Vercel Deployment Guide:");
+    console.error("1. Go to your project dashboard");
+    console.error("2. Navigate to Settings > Environment Variables");
+    console.error("3. Add all required variables");
+    console.error("4. Redeploy the project\n");
+  }
+  throw error;
+}
+
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
