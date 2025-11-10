@@ -112,12 +112,21 @@ const jawabanColumns = `
 
 /**
  * GET /api/soal
- * Get all soal (grouped by materi)
- * Query params: materi_id, level_soal, tipe_jawaban
+ * Get all soal (grouped by materi) filtered by kelas_id
+ * Query params: kelas_id (REQUIRED), materi_id, level_soal, tipe_jawaban
  */
 export const getAllSoal = async (req, res) => {
   try {
-    const { materi_id, level_soal, tipe_jawaban } = req.query;
+    const { kelas_id, materi_id, level_soal, tipe_jawaban } = req.query;
+
+    // Validasi kelas_id wajib untuk mem-filter soal sesuai kelas
+    if (!kelas_id) {
+      return errorResponse(
+        res,
+        "Parameter kelas_id wajib diisi untuk filter soal per kelas",
+        400
+      );
+    }
 
     let query = supabaseAdmin
       .from("bank_soal")
@@ -134,19 +143,20 @@ export const getAllSoal = async (req, res) => {
         )
       `
       )
+      .eq("materi.kelas_id", kelas_id) // Filter by kelas_id through materi relation
       .order("created_at", { ascending: false });
 
-    // Filter by materi_id
+    // Filter by materi_id (optional)
     if (materi_id) {
       query = query.eq("materi_id", materi_id);
     }
 
-    // Filter by level_soal
+    // Filter by level_soal (optional)
     if (level_soal) {
       query = query.eq("level_soal", level_soal);
     }
 
-    // Filter by tipe_jawaban
+    // Filter by tipe_jawaban (optional)
     if (tipe_jawaban) {
       query = query.eq("tipe_jawaban", tipe_jawaban);
     }
@@ -155,9 +165,12 @@ export const getAllSoal = async (req, res) => {
 
     if (error) throw error;
 
+    // Filter out soal where materi is null (jika ada orphan data)
+    const filteredData = data?.filter((soal) => soal.materi !== null) || [];
+
     return successResponse(
       res,
-      { data: data || [] },
+      { data: filteredData },
       "Berhasil mengambil data soal"
     );
   } catch (error) {
@@ -730,11 +743,23 @@ export const deleteSoal = async (req, res) => {
 
 /**
  * GET /api/soal/materi-dropdown
- * Get list materi for dropdown
+ * Get list materi for dropdown filtered by kelas_id
+ * Query params: kelas_id (REQUIRED)
  */
 export const getMateriDropdown = async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { kelas_id } = req.query;
+
+    // Validasi kelas_id wajib untuk mem-filter materi sesuai kelas
+    if (!kelas_id) {
+      return errorResponse(
+        res,
+        "Parameter kelas_id wajib diisi untuk filter materi per kelas",
+        400
+      );
+    }
+
+    let query = supabaseAdmin
       .from("materi")
       .select(
         `
@@ -744,11 +769,15 @@ export const getMateriDropdown = async (req, res) => {
         kelas:kelas_id (
           id,
           nama_kelas,
-          tingkat_kelas
+          tingkat_kelas,
+          sekolah_id
         )
       `
       )
+      .eq("kelas_id", kelas_id) // Filter by kelas_id
       .order("created_at", { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
