@@ -172,7 +172,9 @@ export const createJawaban = async (req, res) => {
     }
 
     console.log(
-      `✅ Answer count validation: ${currentAnswerCount + 1}/${kuis.jumlah_soal}`
+      `✅ Answer count validation: ${currentAnswerCount + 1}/${
+        kuis.jumlah_soal
+      }`
     );
 
     // Ambil data soal
@@ -363,8 +365,6 @@ export const createJawaban = async (req, res) => {
       return errorResponse(res, "Gagal menyimpan jawaban", 500);
     }
 
-    // ✅ IMPLEMENTASI LOGIKA RULE-BASED BARU dengan Sistem Poin & Stabilizer
-
     // 1. Ambil semua jawaban sebelumnya untuk sliding window (5 terakhir)
     // Tidak pakai join ke bank_soal untuk menghindari ambiguitas created_at
     const { data: previousAnswers, error: historyError } = await supabaseAdmin
@@ -406,7 +406,7 @@ export const createJawaban = async (req, res) => {
     const answersForCalculation = answersWithDuration.map((item) => ({
       correct: item.benar,
       timeTaken: item.waktu_dijawab,
-      medianTime: item.durasi_soal,
+      durasiSoal: item.durasi_soal, // Durasi yang ditetapkan guru
       questionLevel: parseInt(item.level_soal.replace("level", "")),
     }));
 

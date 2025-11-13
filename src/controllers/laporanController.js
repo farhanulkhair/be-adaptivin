@@ -160,111 +160,130 @@ export const getLaporanSiswa = async (req, res) => {
     ];
 
     // 7. Build progress per materi
-    const materiProgress = materiList.map((materi) => {
-      // Filter hasil kuis untuk materi ini
-      const hasilKuisMateri = (hasilKuisList || []).filter(
-        (h) => h.kuis?.materi_id === materi.id
-      );
+    const materiProgress = await Promise.all(
+      materiList.map(async (materi) => {
+        // Filter hasil kuis untuk materi ini
+        const hasilKuisMateri = (hasilKuisList || []).filter(
+          (h) => h.kuis?.materi_id === materi.id
+        );
 
-      // Hitung total soal yang dijawab untuk materi ini
-      const totalSoalDijawab = jawabanDetails.filter((j) =>
-        hasilKuisMateri.some((h) => h.id === j.hasil_kuis_id)
-      ).length;
+        // Hitung total soal yang dijawab untuk materi ini
+        const totalSoalDijawab = jawabanDetails.filter((j) =>
+          hasilKuisMateri.some((h) => h.id === j.hasil_kuis_id)
+        ).length;
 
-      // Hitung distribusi per level untuk materi ini
-      const materiLevelPerformance = {
-        level1: { benar: 0, salah: 0 },
-        level2: { benar: 0, salah: 0 },
-        level3: { benar: 0, salah: 0 },
-        level4: { benar: 0, salah: 0 },
-        level5: { benar: 0, salah: 0 },
-        level6: { benar: 0, salah: 0 },
-      };
+        // Hitung distribusi per level untuk materi ini
+        const materiLevelPerformance = {
+          level1: { benar: 0, salah: 0 },
+          level2: { benar: 0, salah: 0 },
+          level3: { benar: 0, salah: 0 },
+          level4: { benar: 0, salah: 0 },
+          level5: { benar: 0, salah: 0 },
+          level6: { benar: 0, salah: 0 },
+        };
 
-      jawabanDetails
-        .filter((j) => hasilKuisMateri.some((h) => h.id === j.hasil_kuis_id))
-        .forEach((jawaban) => {
-          const level = jawaban.level_soal.toLowerCase();
-          if (materiLevelPerformance[level]) {
-            if (jawaban.benar) {
-              materiLevelPerformance[level].benar++;
-            } else {
-              materiLevelPerformance[level].salah++;
+        jawabanDetails
+          .filter((j) => hasilKuisMateri.some((h) => h.id === j.hasil_kuis_id))
+          .forEach((jawaban) => {
+            const level = jawaban.level_soal.toLowerCase();
+            if (materiLevelPerformance[level]) {
+              if (jawaban.benar) {
+                materiLevelPerformance[level].benar++;
+              } else {
+                materiLevelPerformance[level].salah++;
+              }
             }
+          });
+
+        // Get analisis untuk materi ini (ambil yang terbaru)
+        const materiAnalisis = analisisList
+          .filter((a) => a.materi_id === materi.id)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+        // Get analisis guru untuk materi ini if exists
+        let materiAnalisisGuru = null;
+        if (materiAnalisis && materiAnalisis.hasil_kuis_id) {
+          const { data: analisisGuruData, error: analisisGuruError } =
+            await supabaseAdmin
+              .from("analisis_ai_guru")
+              .select("*")
+              .eq("hasil_kuis_id", materiAnalisis.hasil_kuis_id)
+              .order("created_at", { ascending: false })
+              .limit(1);
+
+          if (!analisisGuruError && analisisGuruData && analisisGuruData.length > 0) {
+            materiAnalisisGuru = analisisGuruData[0];
           }
-        });
-
-      // Get analisis untuk materi ini (ambil yang terbaru)
-      const materiAnalisis = analisisList
-        .filter((a) => a.materi_id === materi.id)
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-
-      // Tentukan status dan progress
-      let status = "not_started";
-      let progress = 0;
-
-      if (hasilKuisMateri.length > 0) {
-        // Ada kuis yang dikerjakan
-        status = "in_progress";
-
-        // Hitung progress berdasarkan jumlah soal yang dijawab
-        // Asumsi: 60 soal = 100% (10 soal per level x 6 level)
-        progress = Math.min(Math.round((totalSoalDijawab / 60) * 100), 100);
-
-        // Materi dianggap COMPLETED jika ada minimal 1 kuis yang selesai (selesai=true)
-        // Kuis dianggap selesai ketika siswa sudah menjawab semua soal kuis
-        const adaKuisSelesai = hasilKuisMateri.some((h) => h.selesai === true);
-
-        if (adaKuisSelesai) {
-          status = "completed";
-          // Set progress minimal 80% jika sudah ada kuis yang selesai
-          progress = Math.max(progress, 80);
         }
-      }
 
-      return {
-        materiId: materi.id,
-        judul: materi.judul_materi,
-        deskripsi: materi.deskripsi,
-        progress,
-        status,
-        totalKuisDikerjakan: hasilKuisMateri.length,
-        totalSoalDijawab,
-        performanceByLevel: [
-          {
-            level: "level1",
-            benar: materiLevelPerformance.level1.benar,
-            salah: materiLevelPerformance.level1.salah,
-          },
-          {
-            level: "level2",
-            benar: materiLevelPerformance.level2.benar,
-            salah: materiLevelPerformance.level2.salah,
-          },
-          {
-            level: "level3",
-            benar: materiLevelPerformance.level3.benar,
-            salah: materiLevelPerformance.level3.salah,
-          },
-          {
-            level: "level4",
-            benar: materiLevelPerformance.level4.benar,
-            salah: materiLevelPerformance.level4.salah,
-          },
-          {
-            level: "level5",
-            benar: materiLevelPerformance.level5.benar,
-            salah: materiLevelPerformance.level5.salah,
-          },
-          {
-            level: "level6",
-            benar: materiLevelPerformance.level6.benar,
-            salah: materiLevelPerformance.level6.salah,
-          },
-        ],
-        analisis: materiAnalisis || null,
-      };
-    });
+        // Tentukan status dan progress
+        let status = "not_started";
+        let progress = 0;
+
+        if (hasilKuisMateri.length > 0) {
+          // Ada kuis yang dikerjakan
+          status = "in_progress";
+
+          // Hitung progress berdasarkan jumlah soal yang dijawab
+          // Asumsi: 60 soal = 100% (10 soal per level x 6 level)
+          progress = Math.min(Math.round((totalSoalDijawab / 60) * 100), 100);
+
+          // Materi dianggap COMPLETED jika ada minimal 1 kuis yang selesai (selesai=true)
+          // Kuis dianggap selesai ketika siswa sudah menjawab semua soal kuis
+          const adaKuisSelesai = hasilKuisMateri.some((h) => h.selesai === true);
+
+          if (adaKuisSelesai) {
+            status = "completed";
+            // Set progress minimal 80% jika sudah ada kuis yang selesai
+            progress = Math.max(progress, 80);
+          }
+        }
+
+        return {
+          materiId: materi.id,
+          judul: materi.judul_materi,
+          deskripsi: materi.deskripsi,
+          progress,
+          status,
+          totalKuisDikerjakan: hasilKuisMateri.length,
+          totalSoalDijawab,
+          performanceByLevel: [
+            {
+              level: "level1",
+              benar: materiLevelPerformance.level1.benar,
+              salah: materiLevelPerformance.level1.salah,
+            },
+            {
+              level: "level2",
+              benar: materiLevelPerformance.level2.benar,
+              salah: materiLevelPerformance.level2.salah,
+            },
+            {
+              level: "level3",
+              benar: materiLevelPerformance.level3.benar,
+              salah: materiLevelPerformance.level3.salah,
+            },
+            {
+              level: "level4",
+              benar: materiLevelPerformance.level4.benar,
+              salah: materiLevelPerformance.level4.salah,
+            },
+            {
+              level: "level5",
+              benar: materiLevelPerformance.level5.benar,
+              salah: materiLevelPerformance.level5.salah,
+            },
+            {
+              level: "level6",
+              benar: materiLevelPerformance.level6.benar,
+              salah: materiLevelPerformance.level6.salah,
+            },
+          ],
+          analisis: materiAnalisis || null,
+          analisisGuru: materiAnalisisGuru || null,
+        };
+      })
+    );
 
     // 8. Build response
     const response = {
@@ -357,9 +376,10 @@ export const getHasilKuisDetail = async (req, res) => {
       }
     }
 
-    // Get jawaban_soal separately for each soal
+    // Get jawaban_soal separately for each soal (both for correct answers AND student answers)
     const soalIds = [...new Set(detailJawaban.map((j) => j.soal_id))];
     let jawabanSoalMap = {};
+    let jawabanSoalById = {}; // Map for looking up answers by ID
 
     if (soalIds.length > 0) {
       const { data: jawabanSoalList, error: jawabanSoalError } =
@@ -375,6 +395,8 @@ export const getHasilKuisDetail = async (req, res) => {
             jawabanSoalMap[js.soal_id] = [];
           }
           jawabanSoalMap[js.soal_id].push(js);
+          // Also index by ID for student answer lookup
+          jawabanSoalById[js.id] = js;
         });
       }
     }
@@ -395,11 +417,15 @@ export const getHasilKuisDetail = async (req, res) => {
         detailJawaban: jawabanHasil.map((j) => {
           // Get correct answer(s) based on question type
           let jawabanBenar = "-";
+          let allJawabanText = []; // All answer options for multiple choice
 
           // Get jawaban_soal for this question
           const jawabanSoalList = jawabanSoalMap[j.soal_id] || [];
 
           if (jawabanSoalList.length > 0) {
+            // Store all answers for reference
+            allJawabanText = jawabanSoalList.map(ans => ans.teks_jawaban);
+            
             const correctAnswers = jawabanSoalList.filter(
               (ans) => ans.is_benar
             );
@@ -413,16 +439,44 @@ export const getHasilKuisDetail = async (req, res) => {
               }
               // For single correct answer (pilihan_ganda, benar_salah)
               else {
-                jawabanBenar = correctAnswers[0].teks_jawaban;
+                // Show all options with indicator of which is correct
+                jawabanBenar = jawabanSoalList
+                  .map((ans) => `${ans.is_benar ? "✓ " : ""}${ans.teks_jawaban}`)
+                  .join(" | ");
               }
             }
           }
-          // For essay/isian, use student's answer if correct
+          // For essay/isian, get correct answer from jawaban_soal table
           else if (
             j.bank_soal?.tipe_jawaban === "isian" ||
             j.bank_soal?.tipe_jawaban === "essay"
           ) {
-            jawabanBenar = j.benar ? j.jawaban_siswa : "-";
+            // For essay/isian, look for the correct answer in jawaban_soal
+            if (jawabanSoalList.length > 0) {
+              const correctAnswer = jawabanSoalList.find(ans => ans.is_benar);
+              jawabanBenar = correctAnswer ? correctAnswer.teks_jawaban : "-";
+            }
+          }
+
+          // Resolve student's answer text
+          let jawabanSiswaText = j.jawaban_siswa || "";
+          
+          // If jawaban_siswa is a UUID (looks like ID), try to resolve it
+          if (jawabanSiswaText && jawabanSiswaText.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            const resolvedAnswer = jawabanSoalById[jawabanSiswaText];
+            if (resolvedAnswer) {
+              jawabanSiswaText = resolvedAnswer.teks_jawaban;
+            }
+          }
+          // For multiple choice complex, might have comma-separated IDs
+          else if (jawabanSiswaText && jawabanSiswaText.includes(",")) {
+            const ids = jawabanSiswaText.split(",").map(id => id.trim());
+            const resolvedAnswers = ids
+              .map(id => jawabanSoalById[id]?.teks_jawaban)
+              .filter(Boolean);
+            if (resolvedAnswers.length > 0) {
+              jawabanSiswaText = resolvedAnswers.join(", ");
+            }
           }
 
           return {
@@ -431,7 +485,7 @@ export const getHasilKuisDetail = async (req, res) => {
             soalId: j.soal_id,
             pertanyaan: j.bank_soal?.soal_teks || "Pertanyaan tidak tersedia",
             tipeSoal: j.level_soal,
-            jawabanSiswa: j.jawaban_siswa || "",
+            jawabanSiswa: jawabanSiswaText,
             jawabanBenar,
             isCorrect: j.benar,
             waktuJawab: j.waktu_dijawab,
