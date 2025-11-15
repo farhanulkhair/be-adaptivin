@@ -64,7 +64,8 @@ async function prepareDataForAI(hasilKuisId) {
         soal:bank_soal!detail_jawaban_siswa_soal_id_fkey(
           soal_teks,
           level_soal,
-          durasi_soal
+          durasi_soal,
+          tipe_jawaban
         )
       `
       )
@@ -73,22 +74,67 @@ async function prepareDataForAI(hasilKuisId) {
 
     if (detailError) throw detailError;
 
-    // 3. Kategorisasi jawaban
-    const jawabanBenar = detailJawaban.filter((j) => j.benar);
-    const jawabanSalah = detailJawaban.filter((j) => !j.benar);
+    // 3. Resolve jawaban siswa dari ID ke teks untuk AI
+    // Untuk setiap jawaban, ambil teks yang sebenarnya
+    const detailJawabanWithText = await Promise.all(
+      detailJawaban.map(async (detail) => {
+        let jawabanSiswaText = detail.jawaban_siswa;
 
-    // 4. Hitung statistik level
+        // Jika tipe jawaban adalah pilihan ganda atau pilihan ganda kompleks
+        if (
+          detail.soal?.tipe_jawaban === "pilihan_ganda" ||
+          detail.soal?.tipe_jawaban === "pilihan_ganda_kompleks"
+        ) {
+          // Jawaban bisa berupa single ID atau multiple IDs (comma separated)
+          const jawabanIds = detail.jawaban_siswa
+            .split(",")
+            .map((id) => id.trim())
+            .filter(Boolean);
+
+          if (jawabanIds.length > 0) {
+            // Ambil teks jawaban dari database
+            const { data: jawabanData, error: jawabanError } =
+              await supabaseAdmin
+                .from("jawaban_soal")
+                .select("id, isi_jawaban")
+                .in("id", jawabanIds);
+
+            if (!jawabanError && jawabanData && jawabanData.length > 0) {
+              // Map IDs to text in the same order
+              jawabanSiswaText = jawabanIds
+                .map((id) => {
+                  const jawaban = jawabanData.find((j) => j.id === id);
+                  return jawaban ? jawaban.isi_jawaban : id;
+                })
+                .join(", ");
+            }
+          }
+        }
+        // Untuk tipe jawaban lainnya (isian singkat, uraian), gunakan langsung
+
+        return {
+          ...detail,
+          jawaban_siswa_text: jawabanSiswaText,
+        };
+      })
+    );
+
+    // 4. Kategorisasi jawaban
+    const jawabanBenar = detailJawabanWithText.filter((j) => j.benar);
+    const jawabanSalah = detailJawabanWithText.filter((j) => !j.benar);
+
+    // 5. Hitung statistik level
     const levelBenar = jawabanBenar.map((j) => j.level_soal);
     const levelSalah = jawabanSalah.map((j) => j.level_soal);
 
-    // 5. Hitung waktu
-    const waktuData = detailJawaban.map((j) => ({
+    // 6. Hitung waktu
+    const waktuData = detailJawabanWithText.map((j) => ({
       waktu_ditentukan: j.soal?.durasi_soal || 0,
       waktu_dijawab: j.waktu_dijawab,
       cepat: j.waktu_dijawab < (j.soal?.durasi_soal || 0),
     }));
 
-    // 6. Susun data untuk AI
+    // 7. Susun data untuk AI dengan teks jawaban yang sudah di-resolve
     return {
       materiInfo: {
         judul: hasilKuis.kuis?.materi?.judul_materi || "",
@@ -96,23 +142,23 @@ async function prepareDataForAI(hasilKuisId) {
       },
       kuisInfo: {
         judul: hasilKuis.kuis?.judul || "",
-        total_soal: detailJawaban.length,
+        total_soal: detailJawabanWithText.length,
       },
       hasilStatistik: {
         total_benar: hasilKuis.total_benar,
         total_salah: hasilKuis.total_salah,
         total_waktu: hasilKuis.total_waktu,
-        persentase: (hasilKuis.total_benar / detailJawaban.length) * 100,
+        persentase: (hasilKuis.total_benar / detailJawabanWithText.length) * 100,
       },
       levelAnalisis: {
         level_benar: levelBenar,
         level_salah: levelSalah,
       },
       waktuAnalisis: waktuData,
-      detailSoal: detailJawaban.map((j) => ({
+      detailSoal: detailJawabanWithText.map((j) => ({
         soal_teks: j.soal?.soal_teks || "",
         level_soal: j.level_soal,
-        jawaban_siswa: j.jawaban_siswa,
+        jawaban_siswa: j.jawaban_siswa_text, // Gunakan teks, bukan ID
         benar: j.benar,
         waktu_dijawab: j.waktu_dijawab,
         waktu_ditentukan: j.soal?.durasi_soal || 0,
@@ -222,8 +268,8 @@ Buat analisis dengan format JSON. Gunakan bahasa yang ramah, profesional, dan mu
 📝 CONTOH FORMAT FIELD "KELEMAHAN" YANG BENAR
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-CONTOH BAIK (Analisis Detail):
-"kelemahan": "Ada beberapa area yang bisa kamu tingkatkan nih:\\n\\nWAJIB ANALISIS SOAL YANG SALAH:\\nMbah lihat dari detail jawaban kamu, ada beberapa soal yang masih perlu diperbaiki:\\n\\n🔍 Soal #3 (Level 4):\\n   Soal: 'Bu Ani membeli 2 1/4 kg gula. Dia menggunakan 3/4 kg untuk membuat kue...'\\n   Jawaban kamu: 1 kg\\n   Kenapa salah: Sepertinya kamu lupa mengubah pecahan campuran ke pecahan biasa dulu sebelum dikurangi. 2 1/4 harus jadi 9/4, baru dikurangi 3/4.\\n   Solusi: Ingat ya, kalau ada pecahan campuran, ubah dulu ke pecahan biasa: (2 × 4) + 1 = 9, jadi 9/4. Baru dikurangi: 9/4 - 3/4 = 6/4 = 1 1/2 kg.\\n\\n🔍 Soal #7 (Level 5):\\n   Soal: 'Perbandingan tinggi Andi dan Budi adalah 3:4. Jika tinggi Andi 135 cm...'\\n   Jawaban kamu: 160 cm\\n   Kenapa salah: Kamu sudah paham konsep perbandingan, tapi sepertinya salah hitung di langkah akhir. Harusnya 135 ÷ 3 = 45, lalu 45 × 4 = 180 cm.\\n   Solusi: Tips: Selalu cek ulang perhitungan perkalian dan pembagian ya. Kamu sudah benar caranya, cuma kurang teliti di hitung-hitungannya.\\n\\nPola Umum: Mbah lihat kamu sudah paham konsepnya dengan baik, tapi kadang kurang teliti dalam perhitungan. Coba pelan-pelan dan cek ulang setiap langkah ya! 😊"
+CONTOH BAIK (Analisis Detail) - WAJIB PAKAI FORMAT INI:
+"kelemahan": "Ada beberapa area yang bisa kamu tingkatkan nih, yuk kita lihat lebih dekat:\\n\\n**WAJIB ANALISIS SOAL YANG SALAH:**\\n\\nMbah lihat dari detail jawaban kamu, ada beberapa soal yang masih perlu diperbaiki:\\n\\n🔍 **Soal #3 (Level 4):**\\n\\n- **Soal:** 'Bu Ani membeli 2 1/4 kg gula. Dia menggunakan 3/4 kg untuk membuat kue...'\\n- **Jawaban kamu:** 1 kg (salah)\\n- **Kenapa salah:** Sepertinya kamu lupa mengubah pecahan campuran ke pecahan biasa dulu sebelum dikurangi. 2 1/4 harus jadi 9/4, baru dikurangi 3/4.\\n- **Solusi:** Ingat ya, kalau ada pecahan campuran, ubah dulu ke pecahan biasa: (2 × 4) + 1 = 9, jadi 9/4. Baru dikurangi: 9/4 - 3/4 = 6/4 = 1 1/2 kg.\\n\\n🔍 **Soal #7 (Level 5):**\\n\\n- **Soal:** 'Perbandingan tinggi Andi dan Budi adalah 3:4. Jika tinggi Andi 135 cm...'\\n- **Jawaban kamu:** 160 cm (salah)\\n- **Kenapa salah:** Kamu sudah paham konsep perbandingan, tapi sepertinya salah hitung di langkah akhir. Harusnya 135 ÷ 3 = 45, lalu 45 × 4 = 180 cm.\\n- **Solusi:** Tips: Selalu cek ulang perhitungan perkalian dan pembagian ya. Kamu sudah benar caranya, cuma kurang teliti di hitung-hitungannya.\\n\\n**Pola Umum:** Mbah lihat kamu sudah paham konsepnya dengan baik, tapi kadang kurang teliti dalam perhitungan. Coba pelan-pelan dan cek ulang setiap langkah ya! 😊"
 
 CONTOH BURUK (Generic, JANGAN DITIRU):
 "kelemahan": "Ada beberapa soal yang masih salah. Kamu perlu latihan lebih banyak di soal level tinggi."  ❌
@@ -235,9 +281,9 @@ CONTOH OUTPUT JSON LENGKAP YANG BAIK:
   "analisis": "Hai! Mbah Adaptivin sudah menganalisis hasil kuis ${data.materiInfo.judul} kamu nih. Dari ${data.kuisInfo.total_soal} soal, kamu berhasil menjawab ${data.hasilStatistik.total_benar} soal dengan benar (${data.hasilStatistik.persentase.toFixed(1)}%). Ini pencapaian yang bagus! Mbah lihat dari detail jawaban kamu, ada pola menarik yang perlu kita bahas ya 📊",
   "level_tertinggi": "level4",
   "level_terendah": "level4",
-  "kelebihan": "Kamu punya kekuatan di beberapa area nih: (1) Pemahaman dasar ${data.materiInfo.judul} sudah cukup kuat, terbukti dari keberhasilanmu di soal-soal level menengah. Mbah lihat kamu bisa menjawab dengan tepat ketika soalnya [sebutkan pola/jenis soal spesifik dari data]. (2) Kecepatan mengerjakanmu bagus, menunjukkan kamu cukup familiar dengan materinya. (3) Konsistensi menjawab benar di level tertentu menandakan pemahaman yang solid 🌟",
+  "kelebihan": "Kamu punya kekuatan di beberapa area nih:\\n\\n• **Pemahaman Dasar Kuat:** Pemahaman dasar ${data.materiInfo.judul} sudah cukup kuat, terbukti dari keberhasilanmu di soal-soal level menengah. Mbah lihat kamu bisa menjawab dengan tepat ketika soalnya [sebutkan pola/jenis soal spesifik dari data].\\n\\n• **Kecepatan Baik:** Kecepatan mengerjakanmu bagus, menunjukkan kamu cukup familiar dengan materinya.\\n\\n• **Konsisten:** Konsistensi menjawab benar di level tertentu menandakan pemahaman yang solid 🌟",
   "kelemahan": "[LIHAT CONTOH FORMAT DI ATAS! WAJIB analisis setiap soal yang salah dengan format: nomor soal, kutip isi soal, jawaban siswa, kenapa salah, dan solusi. Jangan skip soal manapun yang salah!]",
-  "rekomendasi_belajar": "Mbah sudah menyiapkan rencana belajar lengkap untukmu berdasarkan analisis detail jawaban kamu! Ikuti langkah-langkah ini ya:\n\n🎯 FOKUS PRIORITAS (PALING PENTING):\n• [Sebutkan konsep SPESIFIK yang perlu diperbaiki berdasarkan soal yang SALAH, contoh: 'Latih lagi cara mengubah pecahan biasa ke pecahan campuran karena Mbah lihat kamu masih kesulitan di soal #3 dan #5']\n• [Berikan tips konkret untuk menghindari kesalahan yang sama, contoh: 'Ingat ya, kalau mau mengubah pecahan biasa jadi campuran, pembilangnya harus lebih besar dari penyebutnya dulu']\n• Ulangi soal-soal yang mirip dengan yang salah tadi sampai kamu paham betul konsepnya\n\n📚 TAHAP 1: PERKUAT FONDASI (Minggu 1-2)\n• Fokus ke konsep [sebutkan konsep yang perlu diperbaiki] - ini yang paling penting untuk kamu saat ini\n• Buat ringkasan atau mind map sendiri tentang materi ini - menulisnya akan membantu kamu mengingat lebih baik\n• Latihan rutin 15-20 menit setiap hari khusus untuk tipe soal yang tadi salah (lebih efektif dari belajar 2 jam sekali!)\n• Coba jelaskan materi ini ke teman/keluarga - kalau kamu bisa mengajarkan, berarti kamu sudah paham\n\n🎯 TAHAP 2: TINGKATKAN KEMAMPUAN (Minggu 3-4)\n• Mulai coba soal-soal yang levelnya lebih tinggi secara bertahap\n• Teknik membaca soal: Baca 2-3 kali, garis bawahi kata kunci, pahami apa yang ditanya sebelum jawab\n• Kalau salah, JANGAN langsung lanjut! Analisis: Kenapa salah? Bagian mana yang kurang paham? Lalu perbaiki\n• Khusus untuk soal [sebutkan jenis soal yang sering salah], coba dengan strategi [berikan strategi spesifik]\n\n💪 TAHAP 3: LATIHAN INTENSIF (Minggu 5-6)\n• Kerjakan soal campuran (mudah-sedang-sulit) untuk bangun stamina mental\n• Set target: misalnya 'hari ini aku mau benar minimal 8 dari 10 soal'\n• Latihan dengan timer - ini melatih kecepatan sekaligus akurasi\n• Review error: Setiap akhir minggu, lihat lagi soal-soal yang salah (terutama soal #[nomor] yang tadi) dan coba ulang\n\n📖 STRATEGI BELAJAR EFEKTIF:\n• Pomodoro Technique: Belajar fokus 25 menit, istirahat 5 menit, ulangi 4x, lalu istirahat panjang 15-30 menit\n• Belajar di waktu yang sama setiap hari membantu otak membentuk kebiasaan\n• Gunakan berbagai sumber: buku, video (lihat rekomendasi Mbah di bawah), dan latihan online\n\n🤝 JANGAN LUPA:\n• Tanya guru/teman kalau ada yang membingungkan - tidak ada pertanyaan yang bodoh!\n• Bergabung dengan kelompok belajar bisa membuat belajar lebih menyenangkan\n• Istirahat cukup, makan bergizi, dan olahraga ringan - otak butuh tubuh yang sehat untuk belajar optimal\n\n✨ MINDSET JUARA:\n• Setiap kesalahan adalah kesempatan belajar, bukan kegagalan\n• Bandingkan dirimu hari ini dengan dirimu kemarin, bukan dengan orang lain\n• Percaya diri! Kamu pasti bisa menguasai ${data.materiInfo.judul} dengan latihan yang konsisten\n\nPENTING: Gunakan detail soal yang sudah Mbah kasih lihat di atas untuk memberikan rekomendasi yang SPESIFIK dan PERSONAL, bukan saran umum!",
+  "rekomendasi_belajar": "Mbah sudah menyiapkan rencana belajar lengkap untukmu berdasarkan analisis detail jawaban kamu! Ikuti langkah-langkah ini ya:\\n\\n🎯 **FOKUS PRIORITAS (PALING PENTING):**\\n\\n• [Sebutkan konsep SPESIFIK yang perlu diperbaiki berdasarkan soal yang SALAH, contoh: 'Latih lagi cara mengubah pecahan biasa ke pecahan campuran karena Mbah lihat kamu masih kesulitan di soal #3 dan #5']\\n\\n• [Berikan tips konkret untuk menghindari kesalahan yang sama, contoh: 'Ingat ya, kalau mau mengubah pecahan biasa jadi campuran, pembilangnya harus lebih besar dari penyebutnya dulu']\\n\\n• Ulangi soal-soal yang mirip dengan yang salah tadi sampai kamu paham betul konsepnya\\n\\n📚 **TAHAP 1: PERKUAT FONDASI (Minggu 1-2)**\\n\\n• Fokus ke konsep [sebutkan konsep yang perlu diperbaiki] - ini yang paling penting untuk kamu saat ini\\n\\n• Buat ringkasan atau mind map sendiri tentang materi ini - menulisnya akan membantu kamu mengingat lebih baik\\n\\n• Latihan rutin 15-20 menit setiap hari khusus untuk tipe soal yang tadi salah (lebih efektif dari belajar 2 jam sekali!)\\n\\n• Coba jelaskan materi ini ke teman/keluarga - kalau kamu bisa mengajarkan, berarti kamu sudah paham\\n\\n🎯 **TAHAP 2: TINGKATKAN KEMAMPUAN (Minggu 3-4)**\\n\\n• Mulai coba soal-soal yang levelnya lebih tinggi secara bertahap\\n\\n• Teknik membaca soal: Baca 2-3 kali, garis bawahi kata kunci, pahami apa yang ditanya sebelum jawab\\n\\n• Kalau salah, JANGAN langsung lanjut! Analisis: Kenapa salah? Bagian mana yang kurang paham? Lalu perbaiki\\n\\n• Khusus untuk soal [sebutkan jenis soal yang sering salah], coba dengan strategi [berikan strategi spesifik]\\n\\n💪 **TAHAP 3: LATIHAN INTENSIF (Minggu 5-6)**\\n\\n• Kerjakan soal campuran (mudah-sedang-sulit) untuk bangun stamina mental\\n\\n• Set target: misalnya 'hari ini aku mau benar minimal 8 dari 10 soal'\\n\\n• Latihan dengan timer - ini melatih kecepatan sekaligus akurasi\\n\\n• Review error: Setiap akhir minggu, lihat lagi soal-soal yang salah (terutama soal #[nomor] yang tadi) dan coba ulang\\n\\n📖 **STRATEGI BELAJAR EFEKTIF:**\\n\\n• Pomodoro Technique: Belajar fokus 25 menit, istirahat 5 menit, ulangi 4x, lalu istirahat panjang 15-30 menit\\n\\n• Belajar di waktu yang sama setiap hari membantu otak membentuk kebiasaan\\n\\n• Gunakan berbagai sumber: buku, video (lihat rekomendasi Mbah di bawah), dan latihan online\\n\\n🤝 **JANGAN LUPA:**\\n\\n• Tanya guru/teman kalau ada yang membingungkan - tidak ada pertanyaan yang bodoh!\\n\\n• Bergabung dengan kelompok belajar bisa membuat belajar lebih menyenangkan\\n\\n• Istirahat cukup, makan bergizi, dan olahraga ringan - otak butuh tubuh yang sehat untuk belajar optimal\\n\\n✨ **MINDSET JUARA:**\\n\\n• Setiap kesalahan adalah kesempatan belajar, bukan kegagalan\\n\\n• Bandingkan dirimu hari ini dengan dirimu kemarin, bukan dengan orang lain\\n\\n• Percaya diri! Kamu pasti bisa menguasai ${data.materiInfo.judul} dengan latihan yang konsisten\\n\\nPENTING: Gunakan detail soal yang sudah Mbah kasih lihat di atas untuk memberikan rekomendasi yang SPESIFIK dan PERSONAL, bukan saran umum!",
   "rekomendasi_video": [
     {"judul": "Video Pembelajaran 1 tentang ${data.materiInfo.judul}", "url": "https://www.youtube.com/watch?v=VIDEO_ID_1"},
     {"judul": "Video Pembelajaran 2 tentang ${data.materiInfo.judul}", "url": "https://www.youtube.com/watch?v=VIDEO_ID_2"},
@@ -302,6 +348,37 @@ JANGAN ubah URL atau judul video! Gunakan persis seperti yang Mbah berikan di at
    - Berikan motivasi untuk soal yang salah + tips konkret untuk perbaikan
 
 INGAT: Tujuan analisis ini adalah memberikan INSIGHT MENDALAM yang ACTIONABLE untuk siswa, bukan sekadar ringkasan hasil kuis!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 FORMAT PENULISAN - WAJIB DIIKUTI!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UNTUK FIELD "KELEBIHAN", "KELEMAHAN", dan "REKOMENDASI_BELAJAR":
+Gunakan format yang TERSTRUKTUR dengan bullet points dan markdown:
+
+1. GUNAKAN \\n\\n untuk membuat paragraf baru
+2. GUNAKAN • (bullet) untuk setiap poin utama
+3. GUNAKAN **teks** untuk membuat teks bold/tebal
+4. GUNAKAN - (dash) untuk sub-poin di bawah 🔍 atau bullet utama
+
+STRUKTUR WAJIB untuk "kelemahan":
+"Ada beberapa area yang bisa kamu tingkatkan nih, yuk kita lihat lebih dekat:\\n\\n**WAJIB ANALISIS SOAL YANG SALAH:**\\n\\nMbah lihat dari detail jawaban kamu, ada beberapa soal yang masih perlu diperbaiki:\\n\\n🔍 **Soal #[nomor] (Level [X]):**\\n\\n- **Soal:** '[kutip soal]'\\n- **Jawaban kamu:** [jawaban] (salah)\\n- **Kenapa salah:** [penjelasan detail]\\n- **Solusi:** [langkah konkret]\\n\\n[ulangi format di atas untuk setiap soal yang salah]\\n\\n**Pola Umum:** [kesimpulan pola kesalahan]"
+
+STRUKTUR WAJIB untuk "kelebihan":
+"Kamu punya kekuatan di beberapa area nih:\\n\\n• **[Judul Kelebihan 1]:** [Penjelasan detail]\\n\\n• **[Judul Kelebihan 2]:** [Penjelasan detail]\\n\\n• **[Judul Kelebihan 3]:** [Penjelasan detail]"
+
+STRUKTUR WAJIB untuk "rekomendasi_belajar":
+"Mbah sudah menyiapkan rencana belajar lengkap untukmu berdasarkan analisis detail jawaban kamu! Ikuti langkah-langkah ini ya:\\n\\n🎯 **FOKUS PRIORITAS (PALING PENTING):**\\n\\n• [Poin 1]\\n\\n• [Poin 2]\\n\\n• [Poin 3]\\n\\n• [Poin 4]\\n\\n📚 **TAHAP 1: PERKUAT FONDASI (Minggu 1-2)**\\n\\n• [Poin 1]\\n\\n• [Poin 2]\\n\\n• [Poin 3]\\n\\n• [Poin 4]\\n\\n🎯 **TAHAP 2: TINGKATKAN KEMAMPUAN (Minggu 3-4)**\\n\\n• [Poin 1]\\n\\n• [Poin 2]\\n\\n• [Poin 3]\\n\\n• [Poin 4]\\n\\n💪 **TAHAP 3: LATIHAN INTENSIF (Minggu 5-6)**\\n\\n• [Poin 1]\\n\\n• [Poin 2]\\n\\n• [Poin 3]\\n\\n• [Poin 4]\\n\\n📖 **STRATEGI BELAJAR EFEKTIF:**\\n\\n• [Poin 1]\\n\\n• [Poin 2]\\n\\n• [Poin 3]\\n\\n🤝 **JANGAN LUPA:**\\n\\n• [Poin 1]\\n\\n• [Poin 2]\\n\\n• [Poin 3]\\n\\n✨ **MINDSET JUARA:**\\n\\n• [Poin 1]\\n\\n• [Poin 2]\\n\\n• [Poin 3]"
+
+SANGAT PENTING - ATURAN SPACING:
+- JANGAN menulis paragraf panjang yang menyambung!
+- WAJIB pisahkan setiap poin dengan \\n\\n (DOUBLE NEWLINE)
+- WAJIB gunakan • untuk bullet points
+- WAJIB gunakan **bold** untuk judul section
+- Setiap section harus dipisah dengan \\n\\n (DOUBLE NEWLINE)
+- FORMAT YANG BENAR untuk setiap bullet point: "• [Teks poin]\\n\\n• [Teks poin berikutnya]\\n\\n"
+- JANGAN SEPERTI INI: "• [Poin 1] • [Poin 2]" ❌ (SALAH - tidak ada newline)
+- HARUS SEPERTI INI: "• [Poin 1]\\n\\n• [Poin 2]" ✅ (BENAR - ada double newline)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 FORMAT OUTPUT JSON

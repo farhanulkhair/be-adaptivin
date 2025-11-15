@@ -168,9 +168,13 @@ export const getAnalisisByHasilKuis = async (req, res) => {
       `
       )
       .eq("hasil_kuis_id", hasilKuisId)
-      .single();
+      .maybeSingle();
 
-    if (error || !analisis) {
+    if (error && error.code !== 'PGRST116') {
+      console.error("❌ Error fetching analisis AI:", error);
+    }
+
+    if (!analisis) {
       return errorResponse(res, "Analisis tidak ditemukan", 404);
     }
 
@@ -488,12 +492,14 @@ export const getTeacherAnalysisByHasilKuis = async (req, res) => {
       `
       )
       .eq("hasil_kuis_id", hasilKuisId)
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to avoid error when no data found
 
-    console.log("📊 Query result - error:", error, "analisis:", analisis ? "FOUND" : "NOT FOUND");
+    // Only log error if it's not a "no rows" error
+    if (error && error.code !== 'PGRST116') {
+      console.error("❌ Error fetching analisis guru:", error);
+    }
 
-    if (error || !analisis) {
-      console.error("❌ Analisis guru tidak ditemukan untuk hasilKuisId:", hasilKuisId);
+    if (!analisis) {
       return errorResponse(res, "Analisis guru tidak ditemukan", 404);
     }
 
@@ -740,9 +746,13 @@ export const deleteTeacherAnalysis = async (req, res) => {
       .from("analisis_ai_guru")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
-    if (checkError || !existingAnalisis) {
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error("❌ Error checking analisis guru:", checkError);
+    }
+
+    if (!existingAnalisis) {
       return errorResponse(res, "Analisis guru tidak ditemukan", 404);
     }
 

@@ -385,8 +385,12 @@ export const getHasilKuisDetail = async (req, res) => {
       const { data: jawabanSoalList, error: jawabanSoalError } =
         await supabaseAdmin
           .from("jawaban_soal")
-          .select("id, soal_id, teks_jawaban, is_benar")
+          .select("id, soal_id, isi_jawaban, is_benar")
           .in("soal_id", soalIds);
+
+      if (jawabanSoalError) {
+        console.error("Error fetching jawaban_soal:", jawabanSoalError);
+      }
 
       if (!jawabanSoalError && jawabanSoalList) {
         // Group by soal_id
@@ -424,26 +428,17 @@ export const getHasilKuisDetail = async (req, res) => {
 
           if (jawabanSoalList.length > 0) {
             // Store all answers for reference
-            allJawabanText = jawabanSoalList.map(ans => ans.teks_jawaban);
+            allJawabanText = jawabanSoalList.map(ans => ans.isi_jawaban);
             
             const correctAnswers = jawabanSoalList.filter(
               (ans) => ans.is_benar
             );
 
             if (correctAnswers.length > 0) {
-              // For multiple correct answers (pilihan_ganda_kompleks)
-              if (j.bank_soal?.tipe_jawaban === "pilihan_ganda_kompleks") {
-                jawabanBenar = correctAnswers
-                  .map((ans) => ans.teks_jawaban)
-                  .join(", ");
-              }
-              // For single correct answer (pilihan_ganda, benar_salah)
-              else {
-                // Show all options with indicator of which is correct
-                jawabanBenar = jawabanSoalList
-                  .map((ans) => `${ans.is_benar ? "✓ " : ""}${ans.teks_jawaban}`)
-                  .join(" | ");
-              }
+              // For all types: only show correct answers
+              jawabanBenar = correctAnswers
+                .map((ans) => ans.isi_jawaban)
+                .join(", ");
             }
           }
           // For essay/isian, get correct answer from jawaban_soal table
@@ -454,7 +449,7 @@ export const getHasilKuisDetail = async (req, res) => {
             // For essay/isian, look for the correct answer in jawaban_soal
             if (jawabanSoalList.length > 0) {
               const correctAnswer = jawabanSoalList.find(ans => ans.is_benar);
-              jawabanBenar = correctAnswer ? correctAnswer.teks_jawaban : "-";
+              jawabanBenar = correctAnswer ? correctAnswer.isi_jawaban : "-";
             }
           }
 
@@ -465,14 +460,19 @@ export const getHasilKuisDetail = async (req, res) => {
           if (jawabanSiswaText && jawabanSiswaText.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
             const resolvedAnswer = jawabanSoalById[jawabanSiswaText];
             if (resolvedAnswer) {
-              jawabanSiswaText = resolvedAnswer.teks_jawaban;
+              jawabanSiswaText = resolvedAnswer.isi_jawaban;
             }
           }
           // For multiple choice complex, might have comma-separated IDs
           else if (jawabanSiswaText && jawabanSiswaText.includes(",")) {
             const ids = jawabanSiswaText.split(",").map(id => id.trim());
             const resolvedAnswers = ids
-              .map(id => jawabanSoalById[id]?.teks_jawaban)
+              .map(id => {
+                const resolved = jawabanSoalById[id]?.isi_jawaban;
+                if (!resolved) {
+                }
+                return resolved;
+              })
               .filter(Boolean);
             if (resolvedAnswers.length > 0) {
               jawabanSiswaText = resolvedAnswers.join(", ");
