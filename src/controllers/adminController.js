@@ -138,15 +138,13 @@ export const createAdmin = async (req, res) => {
     return successResponse(
       res,
       {
-        admin: {
-          id: userData[0].id,
-          nama_lengkap: userData[0].nama_lengkap,
-          jenis_kelamin: userData[0].jenis_kelamin,
-          sekolah_id: userData[0].sekolah_id,
-          role: userData[0].role,
-          created_at: userData[0].created_at,
-          email: authData.user?.email ?? email,
-        },
+        id: userData[0].id,
+        nama_lengkap: userData[0].nama_lengkap,
+        jenis_kelamin: userData[0].jenis_kelamin,
+        sekolah_id: userData[0].sekolah_id,
+        role: userData[0].role,
+        created_at: userData[0].created_at,
+        email: authData.user?.email ?? email,
       },
       "Admin berhasil ditambahkan",
       201
@@ -173,7 +171,15 @@ export const updateAdmin = async (req, res) => {
       .from("pengguna")
       .update({ nama_lengkap, jenis_kelamin, sekolah_id })
       .eq("id", id)
-      .select();
+      .select(
+        `
+        *,
+        sekolah:sekolah_id (
+          id,
+          nama_sekolah
+        )
+      `
+      );
 
     if (error) {
       return errorResponse(res, error.message, 400);
@@ -201,10 +207,9 @@ export const updateAdmin = async (req, res) => {
     return successResponse(
       res,
       {
-        admin: {
-          ...data[0],
-          email: authData?.user?.email ?? email ?? null,
-        },
+        ...data[0],
+        email: authData?.user?.email ?? email ?? null,
+        sekolah_name: data[0]?.sekolah?.nama_sekolah ?? null,
       },
       "Admin updated successfully"
     );
@@ -227,7 +232,15 @@ export const getAdminById = async (req, res) => {
     const { id } = req.params;
     const { data, error } = await supabaseAdmin
       .from("pengguna")
-      .select("*")
+      .select(
+        `
+        *,
+        sekolah:sekolah_id (
+          id,
+          nama_sekolah
+        )
+      `
+      )
       .eq("id", id)
       .eq("role", "admin")
       .single();
@@ -245,10 +258,9 @@ export const getAdminById = async (req, res) => {
     return successResponse(
       res,
       {
-        user: {
-          ...data,
-          email: authData?.user?.email ?? null,
-        },
+        ...data,
+        email: authData?.user?.email ?? null,
+        sekolah_name: data?.sekolah?.nama_sekolah ?? null,
       },
       "Admin retrieved successfully"
     );
@@ -284,10 +296,18 @@ export const getMyProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Get data from pengguna table
+    // Get data from pengguna table with sekolah info
     const { data, error } = await supabaseAdmin
       .from("pengguna")
-      .select("*")
+      .select(
+        `
+        *,
+        sekolah:sekolah_id (
+          id,
+          nama_sekolah
+        )
+      `
+      )
       .eq("id", userId)
       .single();
 
@@ -308,10 +328,9 @@ export const getMyProfile = async (req, res) => {
     return successResponse(
       res,
       {
-        admin: {
-          ...data,
-          email: authData?.user?.email ?? null,
-        },
+        ...data,
+        email: authData?.user?.email ?? null,
+        sekolah_name: data?.sekolah?.nama_sekolah ?? null,
       },
       "Profile retrieved successfully"
     );
@@ -337,7 +356,15 @@ export const updateMyProfile = async (req, res) => {
       .from("pengguna")
       .update(updateData)
       .eq("id", userId)
-      .select();
+      .select(
+        `
+        *,
+        sekolah:sekolah_id (
+          id,
+          nama_sekolah
+        )
+      `
+      );
 
     if (error) {
       return errorResponse(res, error.message, 400);
@@ -358,10 +385,9 @@ export const updateMyProfile = async (req, res) => {
     return successResponse(
       res,
       {
-        admin: {
-          ...data[0],
-          email: authData?.user?.email ?? null,
-        },
+        ...data[0],
+        email: authData?.user?.email ?? null,
+        sekolah_name: data[0]?.sekolah?.nama_sekolah ?? null,
       },
       "Profile updated successfully"
     );
