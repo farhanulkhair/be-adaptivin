@@ -108,9 +108,9 @@ export const registerUser = async (req, res) => {
 
 export const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, expectedRole } = req.body;
 
-    console.log("🔐 Login attempt for:", email);
+    console.log("🔐 Login attempt for:", email, "Expected role:", expectedRole);
 
     if (!email || !password) {
       return errorResponse(res, "Email dan password wajib diisi", 400);
@@ -147,6 +147,40 @@ export const loginUser = async (req, res) => {
     }
 
     console.log("✅ User data found:", email, userData.role);
+
+    // 2.5️⃣ Validasi role jika expectedRole diberikan
+    if (expectedRole && userData.role !== expectedRole) {
+      console.error(
+        "❌ Role mismatch: expected",
+        expectedRole,
+        "but got",
+        userData.role
+      );
+      
+      // Logout dari Supabase Auth untuk keamanan
+      await supabase.auth.signOut();
+      
+      // Berikan pesan error yang jelas
+      if (expectedRole === "guru" && userData.role === "siswa") {
+        return errorResponse(
+          res,
+          "Akses ditolak! Anda tidak bisa login sebagai guru dengan akun siswa. Silakan gunakan halaman login siswa.",
+          403
+        );
+      } else if (expectedRole === "siswa" && userData.role === "guru") {
+        return errorResponse(
+          res,
+          "Akses ditolak! Anda tidak bisa login sebagai siswa dengan akun guru. Silakan gunakan halaman login guru.",
+          403
+        );
+      } else {
+        return errorResponse(
+          res,
+          `Akses ditolak! Role Anda adalah ${userData.role}, bukan ${expectedRole}.`,
+          403
+        );
+      }
+    }
 
     // 3️⃣ Generate JWT token (custom backend token)
     const token = jwt.sign(
