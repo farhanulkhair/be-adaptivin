@@ -183,8 +183,7 @@ export const getHasilKuisById = async (req, res) => {
         ),
         siswa:pengguna!hasil_kuis_siswa_siswa_id_fkey(
           id,
-          nama_lengkap,
-          email
+          nama_lengkap
         )
       `
       )
@@ -304,8 +303,7 @@ export const getAllHasilKuis = async (req, res) => {
         ),
         siswa:pengguna!hasil_kuis_siswa_siswa_id_fkey(
           id,
-          nama_lengkap,
-          email
+          nama_lengkap
         )
       `
       )
