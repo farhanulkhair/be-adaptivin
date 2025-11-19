@@ -123,6 +123,45 @@ export const deleteSekolah = async (req, res) => {
       );
     }
 
+    // Verify sekolah exists
+    const { data: existingSekolah, error: checkError } = await supabase
+      .from("sekolah")
+      .select("id, nama_sekolah")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (checkError) throw checkError;
+    if (!existingSekolah) {
+      return errorResponse(res, "Sekolah tidak ditemukan", 404);
+    }
+    
+    // Get count of related data before deletion
+    const { count: guruCount } = await supabase
+      .from("pengguna")
+      .select("*", { count: "exact", head: true })
+      .eq("sekolah_id", id)
+      .eq("role", "guru");
+
+    const { count: siswaCount } = await supabase
+      .from("pengguna")
+      .select("*", { count: "exact", head: true })
+      .eq("sekolah_id", id)
+      .eq("role", "siswa");
+
+    const { count: kelasCount } = await supabase
+      .from("kelas")
+      .select("*", { count: "exact", head: true })
+      .eq("sekolah_id", id);
+
+    console.log(`
+      🗑️ Deleting sekolah: ${existingSekolah.nama_sekolah}
+      📊 Related data that will have sekolah_id set to NULL:
+         - ${guruCount || 0} guru(s)
+         - ${siswaCount || 0} siswa(s)
+         - ${kelasCount || 0} kelas(es)
+    `);
+
+    // Delete sekolah (database akan otomatis set NULL ke relasi)
     const { data, error } = await supabase
       .from("sekolah")
       .delete()
@@ -131,8 +170,20 @@ export const deleteSekolah = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(res, data[0], "Sekolah deleted successfully");
+    return successResponse(
+      res, 
+      {
+        ...data[0],
+        affected: {
+          guru: guruCount || 0,
+          siswa: siswaCount || 0,
+          kelas: kelasCount || 0,
+        }
+      }, 
+      `Sekolah berhasil dihapus. ${guruCount || 0} guru, ${siswaCount || 0} siswa, dan ${kelasCount || 0} kelas telah dilepaskan dari sekolah ini.`
+    );
   } catch (error) {
+    console.error("❌ deleteSekolah error:", error);
     return errorResponse(res, error.message, 400);
   }
 };

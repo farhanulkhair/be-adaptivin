@@ -1083,3 +1083,172 @@ export const getAllKarakter = async (req, res) => {
     return errorResponse(res, error.message, 400);
   }
 };
+
+// Bulk move students to another class
+export const bulkMoveStudents = async (req, res) => {
+  try {
+    const { userIds, kelasId } = req.body;
+    const { role: requesterRole, sekolah_id: requesterSchoolId } = req.user;
+
+    // Validation
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return errorResponse(res, "userIds harus berupa array dan tidak boleh kosong", 400);
+    }
+
+    if (!kelasId) {
+      return errorResponse(res, "kelasId wajib diisi", 400);
+    }
+
+    // Check if requester has permission
+    if (!["superadmin", "admin"].includes(requesterRole)) {
+      return errorResponse(res, "Akses ditolak", 403);
+    }
+
+    // Verify target kelas exists and get its school
+    const { data: targetKelas, error: kelasError } = await supabaseAdmin
+      .from("kelas")
+      .select("id, sekolah_id, nama_kelas")
+      .eq("id", kelasId)
+      .maybeSingle();
+
+    if (kelasError) throw kelasError;
+    if (!targetKelas) {
+      return errorResponse(res, "Kelas tujuan tidak ditemukan", 404);
+    }
+
+    // If admin, check if target kelas is in their school
+    if (requesterRole === "admin" && targetKelas.sekolah_id !== requesterSchoolId) {
+      return errorResponse(res, "Anda hanya dapat memindahkan siswa ke kelas di sekolah Anda", 403);
+    }
+
+    // Get all students to be moved
+    const { data: students, error: studentsError } = await supabaseAdmin
+      .from("pengguna")
+      .select("id, role, sekolah_id, nama_lengkap")
+      .in("id", userIds);
+
+    if (studentsError) throw studentsError;
+    if (!students || students.length === 0) {
+      return errorResponse(res, "Tidak ada siswa yang ditemukan", 404);
+    }
+
+    // Validate all are students
+    const nonStudents = students.filter(u => u.role !== "siswa");
+    if (nonStudents.length > 0) {
+      return errorResponse(
+        res,
+        `Hanya siswa yang dapat dipindahkan. Ditemukan ${nonStudents.length} akun non-siswa`,
+        400
+      );
+    }
+
+    // If admin, validate all students are from their school
+    if (requesterRole === "admin") {
+      const outsideSchool = students.filter(s => s.sekolah_id !== requesterSchoolId);
+      if (outsideSchool.length > 0) {
+        return errorResponse(
+          res,
+          "Anda hanya dapat memindahkan siswa dari sekolah Anda",
+          403
+        );
+      }
+    }
+
+    // Delete existing kelas_users assignments for these students
+    const { error: deleteError } = await supabaseAdmin
+      .from("kelas_users")
+      .delete()
+      .in("pengguna_id", userIds)
+      .eq("role_dalam_kelas", "siswa");
+
+    if (deleteError) throw deleteError;
+
+    // Create new assignments to target class
+    const newAssignments = userIds.map(userId => ({
+      kelas_id: kelasId,
+      pengguna_id: userId,
+      role_dalam_kelas: "siswa",
+    }));
+
+    const { error: insertError } = await supabaseAdmin
+      .from("kelas_users")
+      .insert(newAssignments);
+
+    if (insertError) throw insertError;
+
+    return successResponse(
+      res,
+      {
+        movedCount: userIds.length,
+        targetKelas: {
+          id: targetKelas.id,
+          nama_kelas: targetKelas.nama_kelas,
+        },
+      },
+      `Berhasil memindahkan ${userIds.length} siswa ke kelas ${targetKelas.nama_kelas}`
+    );
+  } catch (error) {
+    console.error("❌ bulkMoveStudents error:", error);
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+// Reset user password to default format (nama[0] + 123)
+export const resetUserPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role: requesterRole, sekolah_id: requesterSchoolId } = req.user;
+
+    // Check if requester has permission
+    if (!["superadmin", "admin"].includes(requesterRole)) {
+      return errorResponse(res, "Akses ditolak", 403);
+    }
+
+    // Get user data
+    const { data: user, error: userError } = await supabaseAdmin
+      .from("pengguna")
+      .select("id, nama_lengkap, role, sekolah_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (userError) throw userError;
+    if (!user) {
+      return errorResponse(res, "User tidak ditemukan", 404);
+    }
+
+    // Validate user is guru or siswa
+    if (!["guru", "siswa"].includes(user.role)) {
+      return errorResponse(res, "Reset password hanya untuk guru atau siswa", 400);
+    }
+
+    // If admin, validate user is from their school
+    if (requesterRole === "admin" && user.sekolah_id !== requesterSchoolId) {
+      return errorResponse(res, "Anda hanya dapat mereset password pengguna di sekolah Anda", 403);
+    }
+
+    // Generate new password (nama[0] + 123)
+    const firstName = user.nama_lengkap.split(' ')[0].toLowerCase();
+    const newPassword = `${firstName}123`;
+
+    // Update password in Supabase Auth
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      id,
+      { password: newPassword }
+    );
+
+    if (updateError) throw updateError;
+
+    return successResponse(
+      res,
+      {
+        newPassword,
+        userId: id,
+        userName: user.nama_lengkap,
+      },
+      `Password berhasil direset untuk ${user.nama_lengkap}`
+    );
+  } catch (error) {
+    console.error("❌ resetUserPassword error:", error);
+    return errorResponse(res, error.message, 400);
+  }
+};

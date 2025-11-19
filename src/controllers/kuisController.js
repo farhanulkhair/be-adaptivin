@@ -100,6 +100,8 @@ export const createKuis = async (req, res) => {
  * Mendapatkan semua kuis
  * GET /api/kuis
  * Query params: guru_id, materi_id
+ * 
+ * ⚠️ NOTE: guru_id bisa NULL jika guru pembuat sudah dihapus (ON DELETE SET NULL)
  */
 export const getAllKuis = async (req, res) => {
   try {
@@ -140,7 +142,13 @@ export const getAllKuis = async (req, res) => {
       return errorResponse(res, "Gagal mengambil data kuis", 500);
     }
 
-    return successResponse(res, kuis, "Data kuis berhasil diambil");
+    // ✅ Transform data: tambahkan label untuk kuis yang guru_id-nya NULL
+    const transformedKuis = kuis.map((k) => ({
+      ...k,
+      guru: k.guru || { id: null, nama_lengkap: "Guru tidak ditemukan" },
+    }));
+
+    return successResponse(res, transformedKuis, "Data kuis berhasil diambil");
   } catch (error) {
     console.error("Error in getAllKuis:", error);
     return errorResponse(res, "Terjadi kesalahan server", 500);
@@ -150,6 +158,8 @@ export const getAllKuis = async (req, res) => {
 /**
  * Mendapatkan detail satu kuis
  * GET /api/kuis/:id
+ * 
+ * ⚠️ NOTE: guru_id bisa NULL jika guru pembuat sudah dihapus (ON DELETE SET NULL)
  */
 export const getKuisById = async (req, res) => {
   try {
@@ -178,6 +188,11 @@ export const getKuisById = async (req, res) => {
       return errorResponse(res, "Kuis tidak ditemukan", 404);
     }
 
+    // ✅ Transform data: tambahkan label untuk kuis yang guru_id-nya NULL
+    if (!kuis.guru) {
+      kuis.guru = { id: null, nama_lengkap: "Guru tidak ditemukan" };
+    }
+
     return successResponse(res, kuis, "Detail kuis berhasil diambil");
   } catch (error) {
     console.error("Error in getKuisById:", error);
@@ -194,20 +209,31 @@ export const updateKuis = async (req, res) => {
     const { id } = req.params;
     const { judul, jumlah_soal } = req.body;
     const guru_id = req.user.id;
+    const { role } = req.user;
 
-    // Cek apakah kuis exists dan milik guru ini
+    // Cek apakah kuis exists
     const { data: existingKuis, error: checkError } = await supabaseAdmin
       .from("kuis")
       .select("*")
       .eq("id", id)
-      .eq("guru_id", guru_id)
       .single();
 
     if (checkError || !existingKuis) {
+      return errorResponse(res, "Kuis tidak ditemukan", 404);
+    }
+
+    // ⚠️ IMPORTANT: Setelah schema change, guru_id bisa NULL (jika guru dihapus)
+    // Cek akses: guru hanya bisa edit kuis miliknya, atau kuis yang guru_id-nya NULL
+    // Admin/superadmin bisa edit semua kuis
+    const isGuruOwner = existingKuis.guru_id === guru_id;
+    const isOrphanKuis = existingKuis.guru_id === null;
+    const isAdmin = role === "admin" || role === "superadmin";
+
+    if (!isAdmin && !isGuruOwner && !isOrphanKuis) {
       return errorResponse(
         res,
-        "Kuis tidak ditemukan atau Anda tidak memiliki akses",
-        404
+        "Anda tidak memiliki akses untuk mengubah kuis ini",
+        403
       );
     }
 
@@ -266,20 +292,31 @@ export const deleteKuis = async (req, res) => {
   try {
     const { id } = req.params;
     const guru_id = req.user.id;
+    const { role } = req.user;
 
-    // Cek apakah kuis exists dan milik guru ini
+    // Cek apakah kuis exists
     const { data: existingKuis, error: checkError } = await supabaseAdmin
       .from("kuis")
       .select("*")
       .eq("id", id)
-      .eq("guru_id", guru_id)
       .single();
 
     if (checkError || !existingKuis) {
+      return errorResponse(res, "Kuis tidak ditemukan", 404);
+    }
+
+    // ⚠️ IMPORTANT: Setelah schema change, guru_id bisa NULL (jika guru dihapus)
+    // Cek akses: guru hanya bisa hapus kuis miliknya, atau kuis yang guru_id-nya NULL
+    // Admin/superadmin bisa hapus semua kuis
+    const isGuruOwner = existingKuis.guru_id === guru_id;
+    const isOrphanKuis = existingKuis.guru_id === null;
+    const isAdmin = role === "admin" || role === "superadmin";
+
+    if (!isAdmin && !isGuruOwner && !isOrphanKuis) {
       return errorResponse(
         res,
-        "Kuis tidak ditemukan atau Anda tidak memiliki akses",
-        404
+        "Anda tidak memiliki akses untuk menghapus kuis ini",
+        403
       );
     }
 

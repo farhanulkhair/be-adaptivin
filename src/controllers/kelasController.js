@@ -392,7 +392,7 @@ export const deleteKelas = async (req, res) => {
 
     const { data: existingKelas, error: existingError } = await supabaseAdmin
       .from("kelas")
-      .select("sekolah_id")
+      .select("sekolah_id, nama_kelas")
       .eq("id", id)
       .maybeSingle();
 
@@ -410,6 +410,26 @@ export const deleteKelas = async (req, res) => {
         );
       }
     }
+    
+    // Get count of related data before deletion
+    const { count: guruCount } = await supabaseAdmin
+      .from("kelas_users")
+      .select("*", { count: "exact", head: true })
+      .eq("kelas_id", id)
+      .eq("role_dalam_kelas", "guru");
+
+    const { count: siswaCount } = await supabaseAdmin
+      .from("kelas_users")
+      .select("*", { count: "exact", head: true })
+      .eq("kelas_id", id)
+      .eq("role_dalam_kelas", "siswa");
+
+    console.log(`
+      🗑️ Deleting kelas: ${existingKelas.nama_kelas}
+      📊 Related assignments that will be deleted (CASCADE):
+         - ${guruCount || 0} guru assignment(s)
+         - ${siswaCount || 0} siswa assignment(s)
+    `);
 
     const { data, error } = await supabaseAdmin
       .from("kelas")
@@ -420,8 +440,19 @@ export const deleteKelas = async (req, res) => {
 
     if (error) throw error;
 
-    return successResponse(res, data, "Kelas deleted successfully");
+    return successResponse(
+      res, 
+      {
+        ...data,
+        affected: {
+          guru: guruCount || 0,
+          siswa: siswaCount || 0,
+        }
+      }, 
+      `Kelas berhasil dihapus. ${guruCount || 0} guru dan ${siswaCount || 0} siswa telah dilepaskan dari kelas ini.`
+    );
   } catch (error) {
+    console.error("❌ deleteKelas error:", error);
     return errorResponse(res, error.message, 400);
   }
 };

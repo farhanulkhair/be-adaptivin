@@ -10,6 +10,8 @@ import {
   updateMyPassword,
   getSiswaByKelas,
   getAllKarakter,
+  bulkMoveStudents,
+  resetUserPassword,
 } from "../controllers/userController.js";
 import {
   authMiddleware,
@@ -28,6 +30,12 @@ router.put("/me/password", authMiddleware, updateMyPassword);
 
 // ✅ Get siswa by kelas (guru can see their students)
 router.get("/kelas/:kelasId/siswa", authMiddleware, getSiswaByKelas);
+
+// ✅ Bulk move students to another class
+router.post("/bulk-move", authMiddleware, requireAdminOrSuperadmin, bulkMoveStudents);
+
+// ✅ Reset user password
+router.post("/:id/reset-password", authMiddleware, requireAdminOrSuperadmin, resetUserPassword);
 
 // ✅ Routes for user guru and siswa - Harus pakai authentication
 router.get("/", authMiddleware, requireAdminOrSuperadmin, getAllUsers);

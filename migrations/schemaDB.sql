@@ -49,8 +49,8 @@
 -- 5️⃣ Table Kelas 
 -- CREATE TABLE IF NOT EXISTS public.kelas (
 --   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
---   sekolah_id uuid NOT NULL REFERENCES public.sekolah(id) ON DELETE CASCADE,
---   creator_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE;
+--   sekolah_id uuid REFERENCES public.sekolah(id) ON DELETE SET NULL,
+--   creator_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE,
 --   nama_kelas text NOT NULL,
 --   tingkat_kelas text NOT NULL,
 --   rombel text,
@@ -132,7 +132,7 @@
 -- CREATE TABLE IF NOT EXISTS public.kuis (
 --   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 --   materi_id uuid NOT NULL REFERENCES public.materi(id) ON DELETE CASCADE,
---   guru_id uuid NOT NULL REFERENCES public.pengguna(id) ON DELETE CASCADE,
+--   guru_id uuid REFERENCES public.pengguna(id) ON DELETE SET NULL,
 --   judul text NOT NULL,
 --   jumlah_soal int NOT NULL CHECK (jumlah_soal > 0),
 --   created_at timestamptz DEFAULT now(),
