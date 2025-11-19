@@ -23,6 +23,7 @@ const managedUserBaseSelect = `
   nip,
   sekolah_id,
   karakter_id,
+  has_completed_onboarding,
   creator_id,
   created_at,
   updated_at,
@@ -68,6 +69,7 @@ const serializeManagedUser = (row) => {
     nip: row.nip ?? null,
     sekolah_id: row.sekolah_id ?? null,
     karakter_id: row.karakter_id ?? null,
+    has_completed_onboarding: row.has_completed_onboarding ?? false,
     sekolah: row.sekolah
       ? {
           id: row.sekolah.id,
@@ -652,8 +654,14 @@ export const updateMyPassword = async (req, res) => {
 export const updateMyProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { nama_lengkap, alamat, tanggal_lahir, jenis_kelamin, karakter_id } =
-      req.body;
+    const {
+      nama_lengkap,
+      alamat,
+      tanggal_lahir,
+      jenis_kelamin,
+      karakter_id,
+      has_completed_onboarding,
+    } = req.body;
 
     // Build update object
     const updateData = {};
@@ -661,6 +669,8 @@ export const updateMyProfile = async (req, res) => {
     if (alamat !== undefined) updateData.alamat = alamat;
     if (tanggal_lahir !== undefined)
       updateData.tanggal_lahir = tanggal_lahir || null;
+    if (has_completed_onboarding !== undefined)
+      updateData.has_completed_onboarding = has_completed_onboarding;
 
     if (jenis_kelamin !== undefined) {
       const normalizedJenisKelamin = jenis_kelamin

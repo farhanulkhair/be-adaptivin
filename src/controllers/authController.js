@@ -156,10 +156,10 @@ export const loginUser = async (req, res) => {
         "but got",
         userData.role
       );
-      
+
       // Logout dari Supabase Auth untuk keamanan
       await supabase.auth.signOut();
-      
+
       // Berikan pesan error yang jelas
       if (expectedRole === "guru" && userData.role === "siswa") {
         return errorResponse(
@@ -204,6 +204,7 @@ export const loginUser = async (req, res) => {
           nip: userData.nip,
           nisn: userData.nisn,
           sekolah_id: userData.sekolah_id,
+          has_completed_onboarding: userData.has_completed_onboarding || false,
         },
       },
       "Login success"
