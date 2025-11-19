@@ -1,5 +1,16 @@
 import { supabaseAdmin } from "../config/supabaseAdmin.js";
 import { successResponse, errorResponse } from "../utils/responseHelper.js";
+import {
+  parseExcelFile,
+  generateGuruTemplate,
+  generateSiswaTemplate,
+  validateGuruRow,
+  validateSiswaRow,
+  generatePasswordFromName,
+  normalizeJenisKelamin,
+  exportUsersToExcel,
+  generateCredentialsExport,
+} from "../services/importExportService.js";
 
 const managedUserBaseSelect = `
   id,
@@ -1092,7 +1103,11 @@ export const bulkMoveStudents = async (req, res) => {
 
     // Validation
     if (!Array.isArray(userIds) || userIds.length === 0) {
-      return errorResponse(res, "userIds harus berupa array dan tidak boleh kosong", 400);
+      return errorResponse(
+        res,
+        "userIds harus berupa array dan tidak boleh kosong",
+        400
+      );
     }
 
     if (!kelasId) {
@@ -1117,8 +1132,15 @@ export const bulkMoveStudents = async (req, res) => {
     }
 
     // If admin, check if target kelas is in their school
-    if (requesterRole === "admin" && targetKelas.sekolah_id !== requesterSchoolId) {
-      return errorResponse(res, "Anda hanya dapat memindahkan siswa ke kelas di sekolah Anda", 403);
+    if (
+      requesterRole === "admin" &&
+      targetKelas.sekolah_id !== requesterSchoolId
+    ) {
+      return errorResponse(
+        res,
+        "Anda hanya dapat memindahkan siswa ke kelas di sekolah Anda",
+        403
+      );
     }
 
     // Get all students to be moved
@@ -1133,7 +1155,7 @@ export const bulkMoveStudents = async (req, res) => {
     }
 
     // Validate all are students
-    const nonStudents = students.filter(u => u.role !== "siswa");
+    const nonStudents = students.filter((u) => u.role !== "siswa");
     if (nonStudents.length > 0) {
       return errorResponse(
         res,
@@ -1144,7 +1166,9 @@ export const bulkMoveStudents = async (req, res) => {
 
     // If admin, validate all students are from their school
     if (requesterRole === "admin") {
-      const outsideSchool = students.filter(s => s.sekolah_id !== requesterSchoolId);
+      const outsideSchool = students.filter(
+        (s) => s.sekolah_id !== requesterSchoolId
+      );
       if (outsideSchool.length > 0) {
         return errorResponse(
           res,
@@ -1164,7 +1188,7 @@ export const bulkMoveStudents = async (req, res) => {
     if (deleteError) throw deleteError;
 
     // Create new assignments to target class
-    const newAssignments = userIds.map(userId => ({
+    const newAssignments = userIds.map((userId) => ({
       kelas_id: kelasId,
       pengguna_id: userId,
       role_dalam_kelas: "siswa",
@@ -1218,23 +1242,31 @@ export const resetUserPassword = async (req, res) => {
 
     // Validate user is guru or siswa
     if (!["guru", "siswa"].includes(user.role)) {
-      return errorResponse(res, "Reset password hanya untuk guru atau siswa", 400);
+      return errorResponse(
+        res,
+        "Reset password hanya untuk guru atau siswa",
+        400
+      );
     }
 
     // If admin, validate user is from their school
     if (requesterRole === "admin" && user.sekolah_id !== requesterSchoolId) {
-      return errorResponse(res, "Anda hanya dapat mereset password pengguna di sekolah Anda", 403);
+      return errorResponse(
+        res,
+        "Anda hanya dapat mereset password pengguna di sekolah Anda",
+        403
+      );
     }
 
     // Generate new password (nama[0] + 123)
-    const firstName = user.nama_lengkap.split(' ')[0].toLowerCase();
+    const firstName = user.nama_lengkap.split(" ")[0].toLowerCase();
     const newPassword = `${firstName}123`;
 
     // Update password in Supabase Auth
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      id,
-      { password: newPassword }
-    );
+    const { error: updateError } =
+      await supabaseAdmin.auth.admin.updateUserById(id, {
+        password: newPassword,
+      });
 
     if (updateError) throw updateError;
 
@@ -1249,6 +1281,533 @@ export const resetUserPassword = async (req, res) => {
     );
   } catch (error) {
     console.error("❌ resetUserPassword error:", error);
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+// Download template Excel for import
+export const downloadTemplate = async (req, res) => {
+  try {
+    const { role } = req.params; // 'guru' or 'siswa'
+
+    if (!["guru", "siswa"].includes(role)) {
+      return errorResponse(res, "Role tidak valid", 400);
+    }
+
+    const buffer =
+      role === "guru" ? generateGuruTemplate() : generateSiswaTemplate();
+    const filename = `template_${role}_${Date.now()}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("❌ downloadTemplate error:", error);
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+// Preview import data (validation only)
+export const previewImport = async (req, res) => {
+  try {
+    const { role: requesterRole, sekolah_id: requesterSchoolId } = req.user;
+    const { role, sekolah_id, kelas_id } = req.body;
+
+    if (!["superadmin", "admin"].includes(requesterRole)) {
+      return errorResponse(res, "Akses ditolak", 403);
+    }
+
+    if (!role || !["guru", "siswa"].includes(role)) {
+      return errorResponse(res, "Role tidak valid", 400);
+    }
+
+    if (!req.file) {
+      return errorResponse(res, "File tidak ditemukan", 400);
+    }
+
+    // Validate file type
+    const allowedMimes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv",
+    ];
+    if (!allowedMimes.includes(req.file.mimetype)) {
+      return errorResponse(
+        res,
+        "Format file tidak didukung. Hanya .xlsx atau .csv yang diperbolehkan",
+        400
+      );
+    }
+
+    // Determine sekolah_id
+    const resolvedSchoolId =
+      requesterRole === "admin" ? requesterSchoolId : sekolah_id;
+    if (!resolvedSchoolId) {
+      return errorResponse(res, "Sekolah harus dipilih", 400);
+    }
+
+    // Validate kelas exists and belongs to school
+    if (kelas_id) {
+      const { data: kelasData, error: kelasError } = await supabaseAdmin
+        .from("kelas")
+        .select("id, sekolah_id, nama_kelas")
+        .eq("id", kelas_id)
+        .maybeSingle();
+
+      if (kelasError) throw kelasError;
+      if (!kelasData) {
+        return errorResponse(res, "Kelas tidak ditemukan", 400);
+      }
+
+      if (kelasData.sekolah_id !== resolvedSchoolId) {
+        return errorResponse(
+          res,
+          "Kelas tidak tersedia untuk sekolah yang dipilih",
+          403
+        );
+      }
+    }
+
+    // Parse Excel file
+    const parseResult = parseExcelFile(req.file.buffer);
+    if (!parseResult.success) {
+      return errorResponse(
+        res,
+        `Gagal membaca file: ${parseResult.error}`,
+        400
+      );
+    }
+
+    const rows = parseResult.data;
+    if (rows.length === 0) {
+      return errorResponse(res, "File tidak memiliki data", 400);
+    }
+
+    if (rows.length > 500) {
+      return errorResponse(
+        res,
+        "Maksimal 500 baris per import. Silakan bagi menjadi beberapa file",
+        400
+      );
+    }
+
+    // Validate each row
+    const validationPromises = rows.map((row, index) =>
+      role === "guru"
+        ? validateGuruRow(row, index)
+        : validateSiswaRow(row, index)
+    );
+
+    const validationResults = await Promise.all(validationPromises);
+
+    const validRows = [];
+    const invalidRows = [];
+
+    validationResults.forEach((result, index) => {
+      const rowData = {
+        ...rows[index],
+        rowNumber: result.rowIndex,
+      };
+
+      if (result.isValid) {
+        validRows.push(rowData);
+      } else {
+        invalidRows.push({
+          ...rowData,
+          errors: result.errors,
+        });
+      }
+    });
+
+    return successResponse(res, {
+      totalRows: rows.length,
+      validCount: validRows.length,
+      invalidCount: invalidRows.length,
+      validRows,
+      invalidRows,
+      previewOnly: true,
+    });
+  } catch (error) {
+    console.error("❌ previewImport error:", error);
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+// Import users (actual import)
+export const importUsers = async (req, res) => {
+  try {
+    const {
+      role: requesterRole,
+      id: requesterId,
+      sekolah_id: requesterSchoolId,
+    } = req.user;
+    const { role, sekolah_id, kelas_id, kelas_ids } = req.body;
+
+    console.log("🔍 importUsers called:", {
+      requesterRole,
+      role,
+      sekolah_id,
+      kelas_id,
+      kelas_ids,
+      kelas_ids_type: typeof kelas_ids,
+    });
+
+    if (!["superadmin", "admin"].includes(requesterRole)) {
+      return errorResponse(res, "Akses ditolak", 403);
+    }
+
+    if (!role || !["guru", "siswa"].includes(role)) {
+      return errorResponse(res, "Role tidak valid", 400);
+    }
+
+    if (!req.file) {
+      return errorResponse(res, "File tidak ditemukan", 400);
+    }
+
+    // Validate file type
+    const allowedMimes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv",
+    ];
+    if (!allowedMimes.includes(req.file.mimetype)) {
+      return errorResponse(
+        res,
+        "Format file tidak didukung. Hanya .xlsx atau .csv yang diperbolehkan",
+        400
+      );
+    }
+
+    // Determine sekolah_id
+    const resolvedSchoolId =
+      requesterRole === "admin" ? requesterSchoolId : sekolah_id;
+    if (!resolvedSchoolId) {
+      return errorResponse(res, "Sekolah harus dipilih", 400);
+    }
+
+    // Get sekolah name for credentials export
+    const { data: sekolahData } = await supabaseAdmin
+      .from("sekolah")
+      .select("nama_sekolah")
+      .eq("id", resolvedSchoolId)
+      .single();
+
+    // Validate kelas
+    let kelasData = null;
+    const classesToAssign = [];
+
+    // Parse kelas_ids if it's a JSON string (from FormData)
+    let parsedKelasIds = kelas_ids;
+    if (role === "guru" && typeof kelas_ids === "string") {
+      try {
+        parsedKelasIds = JSON.parse(kelas_ids);
+        console.log("✅ Parsed kelas_ids:", parsedKelasIds);
+      } catch (e) {
+        console.error("❌ Failed to parse kelas_ids:", e);
+        return errorResponse(res, "Format kelas_ids tidak valid", 400);
+      }
+    } else if (role === "guru") {
+      console.log("📝 kelas_ids is already array:", parsedKelasIds);
+    }
+
+    if (
+      role === "guru" &&
+      Array.isArray(parsedKelasIds) &&
+      parsedKelasIds.length > 0
+    ) {
+      console.log("🎯 Assigning guru to classes:", parsedKelasIds);
+      // Guru with multiple classes
+      const { data: kelasDataList, error: kelasError } = await supabaseAdmin
+        .from("kelas")
+        .select("id, sekolah_id, nama_kelas")
+        .in("id", parsedKelasIds);
+
+      if (kelasError) throw kelasError;
+      if (kelasDataList.length !== parsedKelasIds.length) {
+        return errorResponse(res, "Beberapa kelas tidak ditemukan", 400);
+      }
+
+      const invalidKelas = kelasDataList.find(
+        (k) => k.sekolah_id !== resolvedSchoolId
+      );
+      if (invalidKelas) {
+        return errorResponse(
+          res,
+          "Beberapa kelas tidak tersedia untuk sekolah yang dipilih",
+          403
+        );
+      }
+
+      classesToAssign.push(...parsedKelasIds);
+      kelasData = kelasDataList[0]; // Use first kelas for credentials
+    } else if (kelas_id) {
+      // Single kelas assignment
+      const { data: singleKelas, error: kelasError } = await supabaseAdmin
+        .from("kelas")
+        .select("id, sekolah_id, nama_kelas")
+        .eq("id", kelas_id)
+        .maybeSingle();
+
+      if (kelasError) throw kelasError;
+      if (!singleKelas) {
+        return errorResponse(res, "Kelas tidak ditemukan", 400);
+      }
+
+      if (singleKelas.sekolah_id !== resolvedSchoolId) {
+        return errorResponse(
+          res,
+          "Kelas tidak tersedia untuk sekolah yang dipilih",
+          403
+        );
+      }
+
+      classesToAssign.push(kelas_id);
+      kelasData = singleKelas;
+    }
+
+    // Parse Excel file
+    const parseResult = parseExcelFile(req.file.buffer);
+    if (!parseResult.success) {
+      return errorResponse(
+        res,
+        `Gagal membaca file: ${parseResult.error}`,
+        400
+      );
+    }
+
+    const rows = parseResult.data;
+    if (rows.length === 0) {
+      return errorResponse(res, "File tidak memiliki data", 400);
+    }
+
+    if (rows.length > 500) {
+      return errorResponse(
+        res,
+        "Maksimal 500 baris per import. Silakan bagi menjadi beberapa file",
+        400
+      );
+    }
+
+    // Validate each row
+    const validationPromises = rows.map((row, index) =>
+      role === "guru"
+        ? validateGuruRow(row, index)
+        : validateSiswaRow(row, index)
+    );
+
+    const validationResults = await Promise.all(validationPromises);
+
+    const successfulImports = [];
+    const failedImports = [];
+    const credentials = [];
+
+    // Process each valid row
+    for (let i = 0; i < validationResults.length; i++) {
+      const validation = validationResults[i];
+      const row = rows[i];
+
+      if (!validation.isValid) {
+        failedImports.push({
+          rowNumber: validation.rowIndex,
+          data: row,
+          errors: validation.errors,
+        });
+        continue;
+      }
+
+      try {
+        // Generate password
+        const password = generatePasswordFromName(row.nama_lengkap);
+
+        // Create auth user
+        const { data: authData, error: authError } =
+          await supabaseAdmin.auth.admin.createUser({
+            email: row.email.trim(),
+            password,
+            email_confirm: true,
+            user_metadata: {
+              nama_lengkap: row.nama_lengkap.trim(),
+              role,
+            },
+          });
+
+        if (authError) {
+          failedImports.push({
+            rowNumber: validation.rowIndex,
+            data: row,
+            errors: [authError.message],
+          });
+          continue;
+        }
+
+        const userId = authData.user.id;
+
+        // Insert into pengguna table
+        const insertPayload = {
+          id: userId,
+          nama_lengkap: row.nama_lengkap.trim(),
+          role,
+          jenis_kelamin: normalizeJenisKelamin(row.jenis_kelamin),
+          alamat: row.alamat?.trim() || null,
+          tanggal_lahir: row.tanggal_lahir || null,
+          nisn: role === "siswa" ? row.nisn?.trim() : null,
+          nip: role === "guru" ? row.nip?.trim() : null,
+          sekolah_id: resolvedSchoolId,
+          creator_id: requesterId,
+        };
+
+        const { error: insertError } = await supabaseAdmin
+          .from("pengguna")
+          .insert(insertPayload);
+
+        if (insertError) {
+          // Rollback auth user
+          await supabaseAdmin.auth.admin.deleteUser(userId);
+          failedImports.push({
+            rowNumber: validation.rowIndex,
+            data: row,
+            errors: [insertError.message],
+          });
+          continue;
+        }
+
+        // Assign to kelas if provided
+        if (classesToAssign.length > 0) {
+          const roleDalamKelas = role === "guru" ? "guru" : "siswa";
+          const kelasAssignments = classesToAssign.map((kelasId) => ({
+            kelas_id: kelasId,
+            pengguna_id: userId,
+            role_dalam_kelas: roleDalamKelas,
+          }));
+
+          const { error: kelasError } = await supabaseAdmin
+            .from("kelas_users")
+            .insert(kelasAssignments);
+
+          if (kelasError) {
+            // Rollback
+            await supabaseAdmin.from("pengguna").delete().eq("id", userId);
+            await supabaseAdmin.auth.admin.deleteUser(userId);
+            failedImports.push({
+              rowNumber: validation.rowIndex,
+              data: row,
+              errors: [kelasError.message],
+            });
+            continue;
+          }
+        }
+
+        successfulImports.push({
+          rowNumber: validation.rowIndex,
+          data: row,
+          userId,
+        });
+
+        credentials.push({
+          nama_lengkap: row.nama_lengkap.trim(),
+          email: row.email.trim(),
+          password,
+          role,
+          sekolah: sekolahData?.nama_sekolah || "-",
+          kelas: kelasData?.nama_kelas || "-",
+        });
+      } catch (error) {
+        console.error(`Error importing row ${validation.rowIndex}:`, error);
+        failedImports.push({
+          rowNumber: validation.rowIndex,
+          data: row,
+          errors: [error.message],
+        });
+      }
+    }
+
+    // Generate credentials Excel file
+    let credentialsBuffer = null;
+    if (credentials.length > 0) {
+      credentialsBuffer = generateCredentialsExport(credentials);
+    }
+
+    return successResponse(
+      res,
+      {
+        totalRows: rows.length,
+        successCount: successfulImports.length,
+        failedCount: failedImports.length,
+        successfulImports,
+        failedImports,
+        credentials,
+        credentialsFile: credentialsBuffer
+          ? credentialsBuffer.toString("base64")
+          : null,
+      },
+      `Import selesai: ${successfulImports.length} berhasil, ${failedImports.length} gagal`
+    );
+  } catch (error) {
+    console.error("❌ importUsers error:", error);
+    return errorResponse(res, error.message, 400);
+  }
+};
+
+// Export users to Excel
+export const exportUsers = async (req, res) => {
+  try {
+    const { role: requesterRole, sekolah_id: requesterSchoolId } = req.user;
+    const { role, sekolah_id } = req.query;
+
+    if (!["superadmin", "admin"].includes(requesterRole)) {
+      return errorResponse(res, "Akses ditolak", 403);
+    }
+
+    if (!role || !["guru", "siswa"].includes(role)) {
+      return errorResponse(res, "Role tidak valid", 400);
+    }
+
+    // Build query
+    let query = supabaseAdmin
+      .from("pengguna")
+      .select(managedUserBaseSelect)
+      .eq("role", role)
+      .order("created_at", { ascending: false });
+
+    // Apply school filter
+    if (requesterRole === "admin") {
+      if (!requesterSchoolId) {
+        return errorResponse(res, "Admin belum terhubung dengan sekolah", 403);
+      }
+      query = query.eq("sekolah_id", requesterSchoolId);
+    } else if (sekolah_id) {
+      query = query.eq("sekolah_id", sekolah_id);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return errorResponse(res, "Tidak ada data untuk di-export", 404);
+    }
+
+    // Enrich with emails and kelas
+    let enrichedUsers = await enrichUsersWithEmails(data);
+    enrichedUsers = await enrichUsersWithKelasAssignments(enrichedUsers);
+
+    // Generate Excel
+    const buffer = exportUsersToExcel(
+      enrichedUsers.map(serializeManagedUser),
+      role
+    );
+    const filename = `export_${role}_${Date.now()}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("❌ exportUsers error:", error);
     return errorResponse(res, error.message, 400);
   }
 };
