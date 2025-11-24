@@ -17,8 +17,6 @@ export const registerUser = async (req, res) => {
       sekolah_id,
     } = req.body;
 
-    console.log("📝 Register attempt:", { email, role });
-
     if (!email || !password || !nama_lengkap || !role) {
       return errorResponse(res, "Missing required fields", 400);
     }
@@ -45,7 +43,6 @@ export const registerUser = async (req, res) => {
       });
 
     if (authError) {
-      console.error("❌ Auth error:", authError);
       return errorResponse(
         res,
         `Gagal membuat akun: ${authError.message}`,
@@ -54,7 +51,6 @@ export const registerUser = async (req, res) => {
     }
 
     const userId = authData.user.id;
-    console.log("✅ Auth user created:", userId);
 
     // 2️⃣ Insert ke tabel pengguna (TANPA password!)
     const { data, error } = await supabase
@@ -75,7 +71,6 @@ export const registerUser = async (req, res) => {
       .select();
 
     if (error) {
-      console.error("❌ Insert error:", error);
       // Rollback: hapus user dari auth
       await supabase.auth.admin.deleteUser(userId);
       return errorResponse(
@@ -85,14 +80,12 @@ export const registerUser = async (req, res) => {
       );
     }
 
-    console.log("✅ User registered successfully:", data[0].id);
-
     return successResponse(
       res,
       {
         user: {
           id: data[0].id,
-          email: email, // Gunakan email dari request
+          email: email,
           nama_lengkap: data[0].nama_lengkap,
           role: data[0].role,
         },
@@ -101,7 +94,6 @@ export const registerUser = async (req, res) => {
       201
     );
   } catch (error) {
-    console.error("❌ Registration error:", error);
     return errorResponse(res, error.message, 500);
   }
 };
@@ -109,8 +101,6 @@ export const registerUser = async (req, res) => {
 export const loginUser = async (req, res) => {
   try {
     const { email, password, expectedRole } = req.body;
-
-    console.log("🔐 Login attempt for:", email, "Expected role:", expectedRole);
 
     if (!email || !password) {
       return errorResponse(res, "Email dan password wajib diisi", 400);
@@ -124,15 +114,12 @@ export const loginUser = async (req, res) => {
       });
 
     if (authError) {
-      console.error("❌ Auth error:", authError.message);
       return errorResponse(
         res,
         `Email atau password salah: ${authError.message}`,
         400
       );
     }
-
-    console.log("✅ Auth success for user ID:", authData.user.id);
 
     // 2️⃣ Ambil data lengkap dari tabel pengguna
     const { data: userData, error: userError } = await supabase
@@ -142,21 +129,11 @@ export const loginUser = async (req, res) => {
       .single();
 
     if (userError || !userData) {
-      console.error("❌ User data not found:", userError);
       return errorResponse(res, "Data pengguna tidak ditemukan", 400);
     }
 
-    console.log("✅ User data found:", email, userData.role);
-
     // 2.5️⃣ Validasi role jika expectedRole diberikan
     if (expectedRole && userData.role !== expectedRole) {
-      console.error(
-        "❌ Role mismatch: expected",
-        expectedRole,
-        "but got",
-        userData.role
-      );
-
       // Logout dari Supabase Auth untuk keamanan
       await supabase.auth.signOut();
 
@@ -195,7 +172,7 @@ export const loginUser = async (req, res) => {
         token,
         user: {
           id: userData.id,
-          email: email, // Gunakan email dari request karena tabel pengguna mungkin tidak punya kolom email
+          email: email,
           role: userData.role,
           nama_lengkap: userData.nama_lengkap,
           alamat: userData.alamat,
@@ -210,18 +187,14 @@ export const loginUser = async (req, res) => {
       "Login success"
     );
   } catch (error) {
-    console.error("❌ Login error:", error);
     return errorResponse(res, error.message, 500);
   }
 };
 
 export const logoutUser = async (req, res) => {
   try {
-    console.log("🚪 Logout attempt for user ID:", req.user?.id);
-    console.log("✅ User logged out successfully:", req.user?.id);
     return successResponse(res, { success: true }, "Logout successful");
   } catch (error) {
-    console.error("❌ Logout error:", error);
     return errorResponse(res, error.message || "Logout gagal", 500);
   }
 };
